@@ -27,15 +27,21 @@ class PreviewOptions:
 
 
 def _open_camera(cv2: object, index: int, backend: str) -> object:
-    backend_ids = {
-        "dshow": cv2.CAP_DSHOW,
-        "msmf": cv2.CAP_MSMF,
+    backend_constants = {
+        "dshow": "CAP_DSHOW",
+        "msmf": "CAP_MSMF",
     }
-    capture = (
-        cv2.VideoCapture(index, backend_ids[backend])
-        if backend in backend_ids
-        else cv2.VideoCapture(index)
-    )
+    if backend == "auto":
+        capture = cv2.VideoCapture(index)
+    else:
+        constant_name = backend_constants[backend]
+        backend_id = getattr(cv2, constant_name, None)
+        if backend_id is None:
+            raise RuntimeError(
+                f"Esta instalación de OpenCV no ofrece el backend {backend}. "
+                "Ejecuta de nuevo `uv sync` o usa `--backend auto`."
+            )
+        capture = cv2.VideoCapture(index, backend_id)
     if not capture.isOpened():
         capture.release()
         raise RuntimeError(

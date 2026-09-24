@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11,<3.13"
 dependencies = [
     "mediapipe>=0.10.21,<2",
-    "opencv-contrib-python>=4.10,<6",
+    "opencv-contrib-python>=4.10,<5",
 ]
 
 [project.scripts]
