@@ -74,7 +74,7 @@ def recognize_gesture(points: Sequence[NormalizedPoint]) -> GestureResult:
     pinch_ratio = distance(points[4], points[8]) / palm_scale
 
     folded_others = not any(extended[name] for name in ("index", "middle", "ring", "pinky"))
-    if all(extended.values()):
+    if all(extended[name] for name in ("index", "middle", "ring", "pinky")):
         gesture = Gesture.OPEN_PALM
     elif pinch_ratio <= 0.42:
         gesture = Gesture.PINCH

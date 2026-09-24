@@ -37,6 +37,13 @@ def build_parser() -> argparse.ArgumentParser:
             action="store_true",
             help="No refleja horizontalmente la imagen de la cámara.",
         )
+        if command == "control":
+            vision.add_argument(
+                "--sensitivity",
+                type=float,
+                default=0.8,
+                help="Velocidad relativa del cursor (0.1 a 2.0; por defecto: 0.8).",
+            )
 
     download = subparsers.add_parser(
         "download-model", help="Descarga el modelo oficial de Hand Landmarker."
@@ -76,6 +83,7 @@ def main(argv: list[str] | None = None) -> int:
                 mirror=not args.no_mirror,
                 model_path=args.model,
                 control_mouse=args.command == "control",
+                sensitivity=getattr(args, "sensitivity", 0.8),
             )
             return run_preview(options)
     except (FileNotFoundError, RuntimeError, ValueError) as exc:

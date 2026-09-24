@@ -60,11 +60,17 @@ Si se pierde la mano durante 0,35 segundos, el control también se pausa y liber
 el botón. Las esquinas de la pantalla conservan el mecanismo de seguridad de
 PyAutoGUI.
 
-Con el control activo, señala con el índice para mover el cursor. Una pinza
-breve seguida de soltar hace clic. Mantén la pinza al menos 0,45 segundos para
-empezar a arrastrar, mueve la mano y suelta la pinza para terminar. El rectángulo
-de la vista previa indica la zona útil de movimiento: sus bordes se corresponden
-con los bordes de la pantalla principal.
+Con el control activo, señala con el índice y mueve la mano para desplazar el
+cursor desde su posición actual. La posición permanece quieta al formar una
+pinza: si sueltas antes de 0,45 segundos, hace clic exactamente allí. Si mantienes
+la pinza, comienza el arrastre desde esa posición; mueve la mano y suelta la
+pinza para terminar. Al volver a señalar, el cursor retoma el movimiento desde
+donde quedó, sin saltar a otra posición.
+
+La sensibilidad predeterminada es `0.8`. Si necesitas movimientos más finos,
+prueba `uv run asistente-jarvis control --sensitivity 0.6`. Un valor mayor mueve
+el cursor más lejos por el mismo desplazamiento de mano (rango admitido: `0.1` a
+`2.0`).
 
 Al clonar el repositorio, `uv sync` creará el entorno virtual según el `uv.lock`.
 El modelo se guarda en `models/hand_landmarker.task`, una ruta excluida de Git.
@@ -75,7 +81,7 @@ Durante la vista previa prueba estos gestos frente a la cámara:
 |---|---|
 | Índice extendido y otros tres dedos plegados | `INDICE` |
 | Pulgar e índice juntos | `PINZA` |
-| Cinco dedos extendidos | `STOP / PALMA ABIERTA` |
+| Cuatro dedos extendidos, juntos o separados; pulgar libre | `STOP / PALMA ABIERTA` |
 | Pulgar arriba y demás dedos plegados | `PULGAR ARRIBA` |
 | Índice y medio extendidos y separados | `V / DOS DEDOS` |
 | Mano curvada en forma de C | `C (EXPERIMENTAL)` |
@@ -101,7 +107,6 @@ src/asistente_jarvis/
   vision/    captura, modelo, seguimiento de manos y vista previa
   gestures/  geometría y clasificación preliminar
   controls/  control de mouse
-  controls/  adaptadores de mouse y teclado
   speech/    grabación, transcripción y formato
   config/    configuración local
   __main__.py

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from time import monotonic
 
-from asistente_jarvis.controls.mouse import MouseController
+from asistente_jarvis.controls.mouse import MouseController, MouseSettings
 from asistente_jarvis.gestures.detector import Gesture, recognize_gesture
 from asistente_jarvis.gestures.geometry import NormalizedPoint
 from asistente_jarvis.vision.hand_tracker import HandObservation, HandTracker
@@ -26,6 +26,7 @@ class PreviewOptions:
     mirror: bool
     model_path: Path
     control_mouse: bool = False
+    sensitivity: float = 0.8
 
 
 def _open_camera(cv2: object, index: int, backend: str) -> object:
@@ -85,7 +86,7 @@ def run_preview(options: PreviewOptions) -> int:
     import ctypes
     import pyautogui
 
-    mouse = MouseController() if options.control_mouse else None
+    mouse = MouseController(MouseSettings(sensitivity=options.sensitivity)) if options.control_mouse else None
     capture = _open_camera(cv2, options.camera_index, options.backend)
     user32 = ctypes.windll.user32 if mouse is not None else None
     f8_was_down = False
@@ -101,17 +102,6 @@ def run_preview(options: PreviewOptions) -> int:
                     raise RuntimeError("La cámara dejó de entregar imágenes.")
                 if options.mirror:
                     frame = cv2.flip(frame, 1)
-
-                if mouse is not None:
-                    margin = mouse.settings.active_margin
-                    height, width = frame.shape[:2]
-                    cv2.rectangle(
-                        frame,
-                        (round(width * margin), round(height * margin)),
-                        (round(width * (1 - margin)), round(height * (1 - margin))),
-                        (90, 90, 90),
-                        1,
-                    )
 
                 rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 timestamp_ms = int((monotonic() - started_at) * 1000)
