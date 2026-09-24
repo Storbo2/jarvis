@@ -1,0 +1,3 @@
+# Configuración local de ejemplo. Copiar a config.local.toml y ajustar; no guardar secretos.
+[vision]
+camera_index = 0

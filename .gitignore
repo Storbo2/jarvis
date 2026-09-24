@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+*.egg-info/
+.dist/
+build/
+dist/
+
+# Entorno y herramientas
+.venv/
+.env
+.env.*
+!.env.example
+.python-version.local
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.coverage*
+
+# Modelos, checkpoints y archivos de pesos (pueden ser muy grandes)
+models/
+model/
+weights/
+checkpoints/
+*.onnx
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.tflite
+*.task
+*.pb
+
+# Datos locales, datasets, capturas y grabaciones
+data/*
+!data/README.md
+datasets/
+artifacts/
+recordings/
+captures/
+*.wav
+*.mp3
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.parquet
+*.feather
+
+# Secretos y configuración local
+secrets/
+config.local.*
+*.key
+*.pem
+
+# SO / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
