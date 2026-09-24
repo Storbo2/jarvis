@@ -3,8 +3,11 @@ name = "asistente-jarvis"
 version = "0.1.0"
 description = "Experimento de control de Windows mediante gestos de mano y voz"
 readme = "README.md"
-requires-python = ">=3.11"
-dependencies = []
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "mediapipe>=0.10.21,<2",
+    "opencv-contrib-python>=4.10,<6",
+]
 
 [project.scripts]
 asistente-jarvis = "asistente_jarvis.cli:main"
