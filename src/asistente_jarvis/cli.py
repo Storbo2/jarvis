@@ -14,27 +14,29 @@ def build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command")
 
-    preview = subparsers.add_parser(
-        "preview", help="Abre la cámara y muestra landmarks y gestos reconocidos."
-    )
-    preview.add_argument("--camera", type=int, default=0, help="Índice de cámara (por defecto: 0).")
-    preview.add_argument(
-        "--backend",
-        choices=("auto", "dshow", "msmf"),
-        default="auto",
-        help="Backend de cámara para Windows (por defecto: auto).",
-    )
-    preview.add_argument(
-        "--model",
-        type=Path,
-        default=DEFAULT_MODEL_PATH,
-        help=f"Ruta al modelo Hand Landmarker (por defecto: {DEFAULT_MODEL_PATH}).",
-    )
-    preview.add_argument(
-        "--no-mirror",
-        action="store_true",
-        help="No refleja horizontalmente la imagen de la cámara.",
-    )
+    for command, description in (
+        ("preview", "Muestra landmarks y gestos reconocidos."),
+        ("control", "Controla el mouse con índice, pinza y palma abierta."),
+    ):
+        vision = subparsers.add_parser(command, help=description)
+        vision.add_argument("--camera", type=int, default=0, help="Índice de cámara (por defecto: 0).")
+        vision.add_argument(
+            "--backend",
+            choices=("auto", "dshow", "msmf"),
+            default="auto",
+            help="Backend de cámara para Windows (por defecto: auto).",
+        )
+        vision.add_argument(
+            "--model",
+            type=Path,
+            default=DEFAULT_MODEL_PATH,
+            help=f"Ruta al modelo Hand Landmarker (por defecto: {DEFAULT_MODEL_PATH}).",
+        )
+        vision.add_argument(
+            "--no-mirror",
+            action="store_true",
+            help="No refleja horizontalmente la imagen de la cámara.",
+        )
 
     download = subparsers.add_parser(
         "download-model", help="Descarga el modelo oficial de Hand Landmarker."
@@ -65,7 +67,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Modelo disponible en: {path}")
             return 0
 
-        if args.command == "preview":
+        if args.command in ("preview", "control"):
             from asistente_jarvis.vision.preview import PreviewOptions, run_preview
 
             options = PreviewOptions(
@@ -73,6 +75,7 @@ def main(argv: list[str] | None = None) -> int:
                 backend=args.backend,
                 mirror=not args.no_mirror,
                 model_path=args.model,
+                control_mouse=args.command == "control",
             )
             return run_preview(options)
     except (FileNotFoundError, RuntimeError, ValueError) as exc:

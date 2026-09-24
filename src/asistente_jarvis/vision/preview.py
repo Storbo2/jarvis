@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from time import monotonic
 
+from asistente_jarvis.controls.mouse import MouseController
 from asistente_jarvis.gestures.detector import Gesture, recognize_gesture
 from asistente_jarvis.gestures.geometry import NormalizedPoint
 from asistente_jarvis.vision.hand_tracker import HandObservation, HandTracker
@@ -24,6 +25,7 @@ class PreviewOptions:
     backend: str
     mirror: bool
     model_path: Path
+    control_mouse: bool = False
 
 
 def _open_camera(cv2: object, index: int, backend: str) -> object:
@@ -80,8 +82,13 @@ def _draw_hand(cv2: object, frame: object, observation: HandObservation) -> Gest
 
 def run_preview(options: PreviewOptions) -> int:
     import cv2
+    import ctypes
+    import pyautogui
 
+    mouse = MouseController() if options.control_mouse else None
     capture = _open_camera(cv2, options.camera_index, options.backend)
+    user32 = ctypes.windll.user32 if mouse is not None else None
+    f8_was_down = False
     started_at = monotonic()
     last_frame_at = started_at
     fps = 0.0
@@ -95,11 +102,49 @@ def run_preview(options: PreviewOptions) -> int:
                 if options.mirror:
                     frame = cv2.flip(frame, 1)
 
+                if mouse is not None:
+                    margin = mouse.settings.active_margin
+                    height, width = frame.shape[:2]
+                    cv2.rectangle(
+                        frame,
+                        (round(width * margin), round(height * margin)),
+                        (round(width * (1 - margin)), round(height * (1 - margin))),
+                        (90, 90, 90),
+                        1,
+                    )
+
                 rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 timestamp_ms = int((monotonic() - started_at) * 1000)
                 observations = tracker.detect(rgb, timestamp_ms)
+                current_gesture = None
+                current_landmarks = None
                 for observation in observations:
-                    _draw_hand(cv2, frame, observation)
+                    current_gesture = _draw_hand(cv2, frame, observation)
+                    current_landmarks = observation.landmarks
+
+                if mouse is not None:
+                    f8_is_down = bool(user32.GetAsyncKeyState(0x77) & 0x8000)
+                    if f8_is_down and not f8_was_down:
+                        if mouse.armed:
+                            mouse.stop()
+                        else:
+                            mouse.arm()
+                    f8_was_down = f8_is_down
+                    if user32.GetAsyncKeyState(0x1B) & 0x8000:
+                        return 0
+                    mouse.update(current_gesture, current_landmarks)
+
+                    status = "ARRASTRANDO" if mouse.dragging else "ACTIVO" if mouse.armed else "PAUSADO"
+                    cv2.putText(
+                        frame,
+                        f"MOUSE: {status} | F8 activar/pausar | ESC salir",
+                        (16, 82),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.55,
+                        (0, 90, 255) if mouse.dragging else (40, 220, 120),
+                        2,
+                        cv2.LINE_AA,
+                    )
 
                 now = monotonic()
                 instant_fps = 1 / max(now - last_frame_at, 1e-6)
@@ -118,6 +163,13 @@ def run_preview(options: PreviewOptions) -> int:
                 cv2.imshow("Asistente Jarvis - Reconocimiento preliminar", frame)
                 if cv2.waitKey(1) & 0xFF in (ord("q"), 27):
                     return 0
+    except pyautogui.FailSafeException as exc:
+        raise RuntimeError(
+            "Control detenido por el mecanismo de seguridad de PyAutoGUI "
+            "al llegar a una esquina de la pantalla."
+        ) from exc
     finally:
+        if mouse is not None:
+            mouse.close()
         capture.release()
         cv2.destroyAllWindows()

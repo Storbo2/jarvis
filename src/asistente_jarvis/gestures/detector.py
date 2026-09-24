@@ -11,6 +11,9 @@ class Gesture(StrEnum):
     OPEN_PALM = "open_palm"
     PINCH = "pinch"
     POINTING = "pointing"
+    THUMBS_UP = "thumbs_up"
+    VICTORY = "victory"
+    LETTER_C = "letter_c"
     UNKNOWN = "unknown"
 
 
@@ -18,6 +21,9 @@ GESTURE_LABELS = {
     Gesture.OPEN_PALM: "STOP / PALMA ABIERTA",
     Gesture.PINCH: "PINZA",
     Gesture.POINTING: "INDICE",
+    Gesture.THUMBS_UP: "PULGAR ARRIBA",
+    Gesture.VICTORY: "V / DOS DEDOS",
+    Gesture.LETTER_C: "C (EXPERIMENTAL)",
     Gesture.UNKNOWN: "NEUTRO",
 }
 
@@ -67,14 +73,38 @@ def recognize_gesture(points: Sequence[NormalizedPoint]) -> GestureResult:
     extended_names = tuple(name for name, is_extended in extended.items() if is_extended)
     pinch_ratio = distance(points[4], points[8]) / palm_scale
 
+    folded_others = not any(extended[name] for name in ("index", "middle", "ring", "pinky"))
     if all(extended.values()):
         gesture = Gesture.OPEN_PALM
     elif pinch_ratio <= 0.42:
         gesture = Gesture.PINCH
+    elif (
+        extended["thumb"]
+        and folded_others
+        and points[4].y < points[2].y - palm_scale * 0.35
+    ):
+        gesture = Gesture.THUMBS_UP
+    elif (
+        extended["index"]
+        and extended["middle"]
+        and not extended["ring"]
+        and not extended["pinky"]
+        and distance(points[8], points[12]) / palm_scale >= 0.4
+    ):
+        gesture = Gesture.VICTORY
     elif extended["index"] and not any(
         extended[name] for name in ("middle", "ring", "pinky")
     ):
         gesture = Gesture.POINTING
+    elif (
+        extended["thumb"]
+        and not extended["middle"]
+        and not extended["ring"]
+        and not extended["pinky"]
+        and 0.65 <= pinch_ratio <= 1.5
+        and 90 <= joint_angle(points[5], points[6], points[8]) < 155
+    ):
+        gesture = Gesture.LETTER_C
     else:
         gesture = Gesture.UNKNOWN
 
