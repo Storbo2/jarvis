@@ -27,8 +27,8 @@ class MouseController:
         self._mouse.FAILSAFE = True
         self._mouse.PAUSE = 0
         self.settings = settings or MouseSettings()
-        if not 0.1 <= self.settings.sensitivity <= 2.0:
-            raise ValueError("La sensibilidad debe estar entre 0.1 y 2.0.")
+        if not 0.1 <= self.settings.sensitivity <= 4.0:
+            raise ValueError("La sensibilidad debe estar entre 0.1 y 4.0.")
         self.width, self.height = self._mouse.size()
         self.armed = False
         self._pressed = False

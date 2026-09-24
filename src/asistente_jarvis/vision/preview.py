@@ -5,6 +5,7 @@ from pathlib import Path
 from time import monotonic
 
 from asistente_jarvis.controls.mouse import MouseController, MouseSettings
+from asistente_jarvis.controls.shortcuts import ShortcutController
 from asistente_jarvis.gestures.detector import Gesture, recognize_gesture
 from asistente_jarvis.gestures.geometry import NormalizedPoint
 from asistente_jarvis.vision.hand_tracker import HandObservation, HandTracker
@@ -87,12 +88,14 @@ def run_preview(options: PreviewOptions) -> int:
     import pyautogui
 
     mouse = MouseController(MouseSettings(sensitivity=options.sensitivity)) if options.control_mouse else None
+    shortcuts = ShortcutController() if options.control_mouse else None
     capture = _open_camera(cv2, options.camera_index, options.backend)
     user32 = ctypes.windll.user32 if mouse is not None else None
     f8_was_down = False
     started_at = monotonic()
     last_frame_at = started_at
     fps = 0.0
+    shortcut_feedback: tuple[str, float] | None = None
 
     try:
         with HandTracker(options.model_path) as tracker:
@@ -123,8 +126,24 @@ def run_preview(options: PreviewOptions) -> int:
                     if user32.GetAsyncKeyState(0x1B) & 0x8000:
                         return 0
                     mouse.update(current_gesture, current_landmarks)
+                    action = shortcuts.update(
+                        current_gesture,
+                        armed=mouse.armed,
+                        dragging=mouse.dragging,
+                    )
+                    if not mouse.armed:
+                        shortcut_feedback = None
+                    if action is not None:
+                        shortcut_feedback = (action, monotonic())
 
-                    status = "ARRASTRANDO" if mouse.dragging else "ACTIVO" if mouse.armed else "PAUSADO"
+                    if mouse.dragging:
+                        status = "ARRASTRANDO"
+                    elif not mouse.armed:
+                        status = "PAUSADO"
+                    elif current_gesture in (Gesture.UNKNOWN, None):
+                        status = "RECOLOCA LA MANO"
+                    else:
+                        status = "ACTIVO"
                     cv2.putText(
                         frame,
                         f"MOUSE: {status} | F8 activar/pausar | ESC salir",
@@ -135,6 +154,17 @@ def run_preview(options: PreviewOptions) -> int:
                         2,
                         cv2.LINE_AA,
                     )
+                    if shortcut_feedback is not None and monotonic() - shortcut_feedback[1] < 1.4:
+                        cv2.putText(
+                            frame,
+                            shortcut_feedback[0],
+                            (16, 110),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.65,
+                            (40, 220, 120),
+                            2,
+                            cv2.LINE_AA,
+                        )
 
                 now = monotonic()
                 instant_fps = 1 / max(now - last_frame_at, 1e-6)

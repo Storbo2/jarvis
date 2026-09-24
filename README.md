@@ -9,13 +9,13 @@ La versión actual permite:
 - abrir una cámara conectada al equipo;
 - detectar una mano y dibujar sus 21 landmarks;
 - mostrar lateralidad y confianza de la detección;
-- reconocer índice, pinza y palma abierta, además de pulgar arriba, V y una C experimental;
+- reconocer índice, pinza y palma abierta, además de pulgar arriba, V y C;
 - mover el mouse, hacer clic y arrastrar con una mano;
+- copiar y pegar con C y V sostenidas;
 - liberar el botón y desactivar el control con la palma abierta;
 - mostrar FPS y salir de forma segura con `Q` o `Esc`.
 
-Los gestos de pulgar arriba, V y C se muestran en pantalla. Las acciones de dictado,
-copiar y pegar se agregarán después.
+El pulgar arriba se muestra en pantalla. El dictado se agregará después.
 
 ## Hoja de ruta
 
@@ -24,7 +24,7 @@ copiar y pegar se agregarán después.
 3. ~~Añadir control de cursor y mouse con suavizado y un gesto de parada global.~~
 4. Afinar la calibración y la estabilidad temporal con pruebas de uso.
 5. Explorar dictado, formato de puntuación y atajos de teclado.
-6. Evaluar gestos adicionales para copiar y pegar.
+6. ~~Añadir acciones de copiar y pegar para los gestos C y V.~~
 
 El STOP global debe liberar cualquier botón sostenido y cancelar acciones activas. No habilitar control del sistema hasta que la vista previa de landmarks sea estable.
 
@@ -70,7 +70,19 @@ donde quedó, sin saltar a otra posición.
 La sensibilidad predeterminada es `0.8`. Si necesitas movimientos más finos,
 prueba `uv run asistente-jarvis control --sensitivity 0.6`. Un valor mayor mueve
 el cursor más lejos por el mismo desplazamiento de mano (rango admitido: `0.1` a
-`2.0`).
+`4.0`). En un monitor grande empieza por `--sensitivity 1.5` y ajusta desde ahí.
+Un valor muy alto también amplifica los pequeños temblores.
+
+Para alcanzar zonas lejanas sin aumentar tanto la sensibilidad, usa la
+**recolocación**: señala y mueve el cursor; luego deja de señalar (mano neutra),
+vuelve la mano a una posición cómoda y señala de nuevo. El cursor queda quieto
+mientras recolocas la mano. Puedes repetirlo tantas veces como necesites.
+
+Para copiar, selecciona texto con el mouse y mantén la C durante al menos 0,45
+segundos. Para pegar, enfoca el campo de destino y mantén la V el mismo tiempo.
+Cada gesto envía una sola combinación de teclas; suéltalo y vuelve a formarlo
+para repetir. La ventana muestra `Ctrl+C enviado` o `Ctrl+V enviado` al activarse.
+Las combinaciones se envían a la aplicación que tenga el foco en Windows.
 
 Al clonar el repositorio, `uv sync` creará el entorno virtual según el `uv.lock`.
 El modelo se guarda en `models/hand_landmarker.task`, una ruta excluida de Git.
@@ -83,8 +95,8 @@ Durante la vista previa prueba estos gestos frente a la cámara:
 | Pulgar e índice juntos | `PINZA` |
 | Cuatro dedos extendidos, juntos o separados; pulgar libre | `STOP / PALMA ABIERTA` |
 | Pulgar arriba y demás dedos plegados | `PULGAR ARRIBA` |
-| Índice y medio extendidos y separados | `V / DOS DEDOS` |
-| Mano curvada en forma de C | `C (EXPERIMENTAL)` |
+| Índice y medio extendidos y separados | `V / DOS DEDOS`: pegar |
+| Mano curvada en forma de C | `C (EXPERIMENTAL)`: copiar |
 
 Si la cámara principal no corresponde al índice `0`, prueba:
 
@@ -106,7 +118,7 @@ Consulta todas las opciones con `uv run asistente-jarvis preview --help`.
 src/asistente_jarvis/
   vision/    captura, modelo, seguimiento de manos y vista previa
   gestures/  geometría y clasificación preliminar
-  controls/  control de mouse
+  controls/  control de mouse y atajos
   speech/    grabación, transcripción y formato
   config/    configuración local
   __main__.py

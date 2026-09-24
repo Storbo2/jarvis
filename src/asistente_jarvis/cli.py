@@ -16,7 +16,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     for command, description in (
         ("preview", "Muestra landmarks y gestos reconocidos."),
-        ("control", "Controla el mouse con índice, pinza y palma abierta."),
+        ("control", "Controla mouse, copiar y pegar con gestos."),
     ):
         vision = subparsers.add_parser(command, help=description)
         vision.add_argument("--camera", type=int, default=0, help="Índice de cámara (por defecto: 0).")
@@ -42,7 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
                 "--sensitivity",
                 type=float,
                 default=0.8,
-                help="Velocidad relativa del cursor (0.1 a 2.0; por defecto: 0.8).",
+                help="Velocidad relativa del cursor (0.1 a 4.0; por defecto: 0.8).",
             )
 
     download = subparsers.add_parser(
