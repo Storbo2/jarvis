@@ -55,6 +55,11 @@ class MouseController:
         self._last_seen = None
         self._release()
 
+    def cancel_gesture(self) -> None:
+        """Cancela clic/arrastre pendientes sin desarmar el control."""
+        self._clear_tracking()
+        self._release()
+
     def _clear_tracking(self) -> None:
         self._pinch_started = None
         self._pinch_anchor = None
@@ -103,6 +108,7 @@ class MouseController:
         gesture: Gesture | None,
         landmarks: tuple[NormalizedPoint, ...] | None,
         *,
+        pinch_ratio: float | None = None,
         now: float | None = None,
     ) -> None:
         now = monotonic() if now is None else now
@@ -154,6 +160,11 @@ class MouseController:
                 self._mouse.click(button="left")
 
         if gesture is Gesture.POINTING:
+            # Congela el cursor antes de que la pinza alcance el umbral del detector.
+            if pinch_ratio is not None and pinch_ratio <= 0.7:
+                self._pointing_anchor = None
+                self._target_position = None
+                return
             tip = landmarks[8]
             if self._pointing_anchor is None:
                 self._pointing_anchor = tip

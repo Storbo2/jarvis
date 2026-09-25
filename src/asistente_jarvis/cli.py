@@ -44,6 +44,12 @@ def build_parser() -> argparse.ArgumentParser:
                 default=0.8,
                 help="Velocidad relativa del cursor (0.1 a 4.0; por defecto: 0.8).",
             )
+            vision.add_argument(
+                "--select-all-mode",
+                choices=("auto", "ctrl-a", "ctrl-e"),
+                default="auto",
+                help="Atajo para seleccionar todo (por defecto: auto según la aplicación).",
+            )
 
     download = subparsers.add_parser(
         "download-model", help="Descarga el modelo oficial de Hand Landmarker."
@@ -84,6 +90,7 @@ def main(argv: list[str] | None = None) -> int:
                 model_path=args.model,
                 control_mouse=args.command == "control",
                 sensitivity=getattr(args, "sensitivity", 0.8),
+                select_all_mode=getattr(args, "select_all_mode", "auto"),
             )
             return run_preview(options)
     except (FileNotFoundError, RuntimeError, ValueError) as exc:

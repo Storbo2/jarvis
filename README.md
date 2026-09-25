@@ -7,15 +7,17 @@ Experimento personal para controlar Windows mediante gestos de mano y voz. El ob
 La versión actual permite:
 
 - abrir una cámara conectada al equipo;
-- detectar una mano y dibujar sus 21 landmarks;
+- detectar hasta dos manos y dibujar sus 21 landmarks;
 - mostrar lateralidad y confianza de la detección;
 - reconocer índice, pinza y palma abierta, además de pulgar arriba, V y C;
 - mover el mouse, hacer clic y arrastrar con una mano;
-- copiar y pegar con C y V sostenidas;
+- copiar y pegar con C y V sostenidas, y seleccionar todo con una V invertida;
+- controlar el zoom con dos pinzas, una en cada mano;
 - liberar el botón y desactivar el control con la palma abierta;
 - mostrar FPS y salir de forma segura con `Q` o `Esc`.
 
 El pulgar arriba se muestra en pantalla. El dictado se agregará después.
+Consulta [GESTURES.md](GESTURES.md) para la lista completa de gestos y funciones.
 
 ## Hoja de ruta
 
@@ -84,6 +86,17 @@ Cada gesto envía una sola combinación de teclas; suéltalo y vuelve a formarlo
 para repetir. La ventana muestra `Ctrl+C enviado` o `Ctrl+V enviado` al activarse.
 Las combinaciones se envían a la aplicación que tenga el foco en Windows.
 
+Para seleccionar todo, gira la V hacia abajo como una A y mantenla durante
+0,45 segundos. En el Explorador de archivos y en Word, Excel y PowerPoint de
+escritorio se envía `Ctrl+E`; en otras aplicaciones se envía `Ctrl+A`. Puedes forzar una opción con
+`--select-all-mode ctrl-e` o `--select-all-mode ctrl-a`.
+
+Para zoom, muestra una pinza con cada mano durante 0,35 segundos. Separa las
+manos para acercar y júntalas para alejar. Se envían `Ctrl` más suma o resta
+del teclado numérico; la aplicación activa debe admitir esos atajos. Con dos
+manos visibles se suspenden los controles de una mano. STOP funciona con
+cualquiera de las dos manos.
+
 Al clonar el repositorio, `uv sync` creará el entorno virtual según el `uv.lock`.
 El modelo se guarda en `models/hand_landmarker.task`, una ruta excluida de Git.
 
@@ -96,6 +109,7 @@ Durante la vista previa prueba estos gestos frente a la cámara:
 | Cuatro dedos extendidos, juntos o separados; pulgar libre | `STOP / PALMA ABIERTA` |
 | Pulgar arriba y demás dedos plegados | `PULGAR ARRIBA` |
 | Índice y medio extendidos y separados | `V / DOS DEDOS`: pegar |
+| Índice y medio extendidos, separados y apuntando hacia abajo | `A / V INVERTIDA`: seleccionar todo |
 | Mano curvada en forma de C | `C (EXPERIMENTAL)`: copiar |
 
 Si la cámara principal no corresponde al índice `0`, prueba:

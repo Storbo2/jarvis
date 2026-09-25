@@ -5,8 +5,9 @@ from pathlib import Path
 from time import monotonic
 
 from asistente_jarvis.controls.mouse import MouseController, MouseSettings
-from asistente_jarvis.controls.shortcuts import ShortcutController
-from asistente_jarvis.gestures.detector import Gesture, recognize_gesture
+from asistente_jarvis.controls.shortcuts import ShortcutController, ShortcutSettings
+from asistente_jarvis.controls.zoom import ZoomController
+from asistente_jarvis.gestures.detector import Gesture, GestureResult, recognize_gesture
 from asistente_jarvis.gestures.geometry import NormalizedPoint
 from asistente_jarvis.vision.hand_tracker import HandObservation, HandTracker
 
@@ -28,6 +29,7 @@ class PreviewOptions:
     model_path: Path
     control_mouse: bool = False
     sensitivity: float = 0.8
+    select_all_mode: str = "auto"
 
 
 def _open_camera(cv2: object, index: int, backend: str) -> object:
@@ -59,7 +61,9 @@ def _pixel(point: NormalizedPoint, width: int, height: int) -> tuple[int, int]:
     return int(point.x * width), int(point.y * height)
 
 
-def _draw_hand(cv2: object, frame: object, observation: HandObservation) -> Gesture:
+def _draw_hand(
+    cv2: object, frame: object, observation: HandObservation, *, line: int = 0
+) -> GestureResult:
     height, width = frame.shape[:2]
     result = recognize_gesture(observation.landmarks)
     color = (0, 90, 255) if result.gesture is Gesture.OPEN_PALM else (40, 220, 120)
@@ -77,9 +81,10 @@ def _draw_hand(cv2: object, frame: object, observation: HandObservation) -> Gest
         cv2.circle(frame, _pixel(point, width, height), 4, color, -1, cv2.LINE_AA)
 
     title = f"{result.label}  |  {observation.handedness} {observation.confidence:.0%}"
-    cv2.rectangle(frame, (12, 12), (min(width - 12, 520), 55), (20, 20, 20), -1)
-    cv2.putText(frame, title, (24, 43), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2, cv2.LINE_AA)
-    return result.gesture
+    top = 12 + line * 44
+    cv2.rectangle(frame, (12, top), (min(width - 12, 520), top + 43), (20, 20, 20), -1)
+    cv2.putText(frame, title, (24, top + 31), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2, cv2.LINE_AA)
+    return result
 
 
 def run_preview(options: PreviewOptions) -> int:
@@ -88,7 +93,12 @@ def run_preview(options: PreviewOptions) -> int:
     import pyautogui
 
     mouse = MouseController(MouseSettings(sensitivity=options.sensitivity)) if options.control_mouse else None
-    shortcuts = ShortcutController() if options.control_mouse else None
+    shortcuts = (
+        ShortcutController(ShortcutSettings(select_all_mode=options.select_all_mode))
+        if options.control_mouse
+        else None
+    )
+    zoom = ZoomController() if options.control_mouse else None
     capture = _open_camera(cv2, options.camera_index, options.backend)
     user32 = ctypes.windll.user32 if mouse is not None else None
     f8_was_down = False
@@ -96,9 +106,10 @@ def run_preview(options: PreviewOptions) -> int:
     last_frame_at = started_at
     fps = 0.0
     shortcut_feedback: tuple[str, float] | None = None
+    waiting_for_pinch_release = False
 
     try:
-        with HandTracker(options.model_path) as tracker:
+        with HandTracker(options.model_path, num_hands=2) as tracker:
             while True:
                 ok, frame = capture.read()
                 if not ok:
@@ -109,11 +120,10 @@ def run_preview(options: PreviewOptions) -> int:
                 rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 timestamp_ms = int((monotonic() - started_at) * 1000)
                 observations = tracker.detect(rgb, timestamp_ms)
-                current_gesture = None
-                current_landmarks = None
-                for observation in observations:
-                    current_gesture = _draw_hand(cv2, frame, observation)
-                    current_landmarks = observation.landmarks
+                results = [
+                    _draw_hand(cv2, frame, observation, line=index)
+                    for index, observation in enumerate(observations)
+                ]
 
                 if mouse is not None:
                     f8_is_down = bool(user32.GetAsyncKeyState(0x77) & 0x8000)
@@ -125,12 +135,37 @@ def run_preview(options: PreviewOptions) -> int:
                     f8_was_down = f8_is_down
                     if user32.GetAsyncKeyState(0x1B) & 0x8000:
                         return 0
-                    mouse.update(current_gesture, current_landmarks)
-                    action = shortcuts.update(
-                        current_gesture,
-                        armed=mouse.armed,
-                        dragging=mouse.dragging,
-                    )
+                    action = None
+                    if len(observations) == 2:
+                        waiting_for_pinch_release = True
+                        mouse.cancel_gesture()
+                        shortcuts.reset()
+                        if any(result.gesture is Gesture.OPEN_PALM for result in results):
+                            mouse.stop()
+                            zoom.reset()
+                        else:
+                            action = zoom.update(
+                                (results[0].gesture, results[1].gesture),
+                                (observations[0].landmarks[8], observations[1].landmarks[8]),
+                                armed=mouse.armed,
+                            )
+                    else:
+                        zoom.reset()
+                        gesture = results[0].gesture if results else None
+                        landmarks = observations[0].landmarks if observations else None
+                        pinch_ratio = results[0].pinch_ratio if results else None
+                        if waiting_for_pinch_release and gesture is Gesture.PINCH:
+                            mouse.cancel_gesture()
+                            shortcuts.reset()
+                        else:
+                            if gesture is not None:
+                                waiting_for_pinch_release = False
+                            mouse.update(gesture, landmarks, pinch_ratio=pinch_ratio)
+                            action = shortcuts.update(
+                                gesture,
+                                armed=mouse.armed,
+                                dragging=mouse.dragging,
+                            )
                     if not mouse.armed:
                         shortcut_feedback = None
                     if action is not None:
@@ -140,14 +175,19 @@ def run_preview(options: PreviewOptions) -> int:
                         status = "ARRASTRANDO"
                     elif not mouse.armed:
                         status = "PAUSADO"
-                    elif current_gesture in (Gesture.UNKNOWN, None):
+                    elif len(observations) == 2:
+                        status = "ZOOM 2 MANOS" if all(
+                            result.gesture is Gesture.PINCH for result in results
+                        ) else "2 MANOS"
+                    elif not results or results[0].gesture is Gesture.UNKNOWN:
                         status = "RECOLOCA LA MANO"
                     else:
                         status = "ACTIVO"
+                    status_y = 82 + max(0, len(observations) - 1) * 44
                     cv2.putText(
                         frame,
                         f"MOUSE: {status} | F8 activar/pausar | ESC salir",
-                        (16, 82),
+                        (16, status_y),
                         cv2.FONT_HERSHEY_SIMPLEX,
                         0.55,
                         (0, 90, 255) if mouse.dragging else (40, 220, 120),
@@ -158,7 +198,7 @@ def run_preview(options: PreviewOptions) -> int:
                         cv2.putText(
                             frame,
                             shortcut_feedback[0],
-                            (16, 110),
+                            (16, status_y + 28),
                             cv2.FONT_HERSHEY_SIMPLEX,
                             0.65,
                             (40, 220, 120),

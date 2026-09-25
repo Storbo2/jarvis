@@ -13,6 +13,7 @@ class Gesture(StrEnum):
     POINTING = "pointing"
     THUMBS_UP = "thumbs_up"
     VICTORY = "victory"
+    SELECT_ALL = "select_all"
     LETTER_C = "letter_c"
     UNKNOWN = "unknown"
 
@@ -23,6 +24,7 @@ GESTURE_LABELS = {
     Gesture.POINTING: "INDICE",
     Gesture.THUMBS_UP: "PULGAR ARRIBA",
     Gesture.VICTORY: "V / DOS DEDOS",
+    Gesture.SELECT_ALL: "A / V INVERTIDA",
     Gesture.LETTER_C: "C (EXPERIMENTAL)",
     Gesture.UNKNOWN: "NEUTRO",
 }
@@ -91,7 +93,11 @@ def recognize_gesture(points: Sequence[NormalizedPoint]) -> GestureResult:
         and not extended["pinky"]
         and distance(points[8], points[12]) / palm_scale >= 0.4
     ):
-        gesture = Gesture.VICTORY
+        fingers_point_down = (
+            points[8].y > points[5].y + palm_scale * 0.35
+            and points[12].y > points[9].y + palm_scale * 0.35
+        )
+        gesture = Gesture.SELECT_ALL if fingers_point_down else Gesture.VICTORY
     elif extended["index"] and not any(
         extended[name] for name in ("middle", "ring", "pinky")
     ):
