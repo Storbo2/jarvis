@@ -11,7 +11,7 @@ from asistente_jarvis.gestures.geometry import NormalizedPoint
 @dataclass(frozen=True, slots=True)
 class MouseSettings:
     sensitivity: float = 0.8
-    smoothing: float = 0.35
+    smoothing: float = 0.42
     jitter_pixels: float = 1.5
     drag_delay_seconds: float = 0.45
     pinch_release_grace_seconds: float = 0.1
@@ -114,6 +114,16 @@ class MouseController:
         return (
             (after.x - before.x) * (self.width - 1) * self.settings.sensitivity,
             (after.y - before.y) * (self.height - 1) * self.settings.sensitivity,
+        )
+
+    @staticmethod
+    def _pointing_position(landmarks: tuple[NormalizedPoint, ...]) -> NormalizedPoint:
+        # La punta es expresiva pero tiembla; la articulación aporta estabilidad.
+        tip = landmarks[8]
+        joint = landmarks[6]
+        return NormalizedPoint(
+            tip.x * 0.65 + joint.x * 0.35,
+            tip.y * 0.65 + joint.y * 0.35,
         )
 
     def _move_to(self, target: tuple[float, float]) -> None:
@@ -231,7 +241,7 @@ class MouseController:
                 return
             if self._snip_deadline is not None:
                 self._snip_ready = True
-            tip = landmarks[8]
+            tip = self._pointing_position(landmarks)
             if self._pointing_anchor is None:
                 self._pointing_anchor = tip
                 self._target_position = self._current_position()

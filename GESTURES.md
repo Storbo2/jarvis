@@ -52,13 +52,21 @@ una mano. Mantén ambas pinzas unos 0,35 s para establecer la distancia inicial;
 luego mueve las manos. Cada cambio suficiente de distancia envía un paso de
 zoom. Al desaparecer una mano, la pinza restante no inicia un clic hasta que
 se suelte. El efecto de zoom depende de que la aplicación activa admita estos
-atajos.
+atajos. Una pérdida breve de la etiqueta de pinza no reinicia la calibración
+del zoom.
 
 Para desplazar, mantén un puño fijo y señala con la otra mano. El modificador
 de dos manos admite tanto el puño normal como el frontal. La primera
 dirección predominante fija el eje del desplazamiento. Para cambiar de eje,
 deja de señalar y vuelve a señalar. La rueda actúa sobre la ventana bajo el
 cursor; algunas aplicaciones no admiten desplazamiento horizontal.
+
+Con dos manos visibles, el programa resuelve la postura como pareja: si una
+mano se parece a una pinza y la otra señala, forma una V o muestra un pulgar
+lateral, la primera aparece como `PUNO / MODIFICADOR`. Esto evita que un puño
+confundido con pinza bloquee scroll, Alt+Tab o deshacer/rehacer. Dos manos
+clasificadas como pinza siguen reservadas para el zoom. Con una sola mano,
+la pinza conserva su prioridad para clic y arrastre.
 
 Para cambiar aplicaciones, mantén un puño fijo y forma una V con la otra mano
 durante 0,35 s. Se mantiene `Alt` y se pulsa `Tab` una vez para abrir el

@@ -71,6 +71,8 @@ pinza: si sueltas antes de 0,45 segundos, hace clic exactamente allí. Si mantie
 la pinza, comienza el arrastre desde esa posición; mueve la mano y suelta la
 pinza para terminar. Al volver a señalar, el cursor retoma el movimiento desde
 donde quedó, sin saltar a otra posición.
+El movimiento combina la punta y la articulación del índice para reducir el
+temblor de la detección sin perder la dirección de la mano.
 
 La sensibilidad predeterminada es `0.8`. Si necesitas movimientos más finos,
 prueba `uv run asistente-jarvis control --sensitivity 0.6`. Un valor mayor mueve
@@ -109,6 +111,9 @@ la inclinación repite los pasos sin exigir un desplazamiento largo de la mano.
 Suelta el puño para seleccionar. STOP, `F8`, `Esc` y la pérdida de una mano
 sueltan `Alt`. Con un puño y el pulgar de la otra mano hacia la izquierda o la
 derecha se envía `Ctrl+Z` o `Ctrl+Y`, respectivamente.
+Si el detector confunde ese puño con una pinza, el control de dos manos usa
+el gesto de la otra mano para mantener el puño como modificador. Dos pinzas
+siguen reservadas para el zoom.
 
 Mantener `ILoveYou` con una mano durante 0,45 segundos abre el recorte de
 pantalla de Windows (`Win+Shift+S`). Señala con el índice para colocar el cursor,

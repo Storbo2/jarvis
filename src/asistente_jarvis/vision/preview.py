@@ -9,8 +9,10 @@ from asistente_jarvis.controls.overlay import CommandOverlay
 from asistente_jarvis.controls.shortcuts import ShortcutController, ShortcutSettings
 from asistente_jarvis.controls.two_hands import TwoHandController
 from asistente_jarvis.controls.zoom import ZoomController
-from asistente_jarvis.gestures.detector import Gesture, GestureResult, recognize_gesture
-from asistente_jarvis.gestures.geometry import NormalizedPoint
+from asistente_jarvis.gestures.detector import (
+    GESTURE_LABELS, Gesture, GestureResult, recognize_gesture,
+)
+from asistente_jarvis.gestures.geometry import NormalizedPoint, distance
 from asistente_jarvis.vision.hand_tracker import HandObservation, HandTracker
 
 
@@ -64,10 +66,15 @@ def _pixel(point: NormalizedPoint, width: int, height: int) -> tuple[int, int]:
 
 
 def _draw_hand(
-    cv2: object, frame: object, observation: HandObservation, *, line: int = 0
-) -> GestureResult:
+    cv2: object,
+    frame: object,
+    observation: HandObservation,
+    result: GestureResult,
+    *,
+    line: int = 0,
+    display_gesture: Gesture | None = None,
+) -> None:
     height, width = frame.shape[:2]
-    result = recognize_gesture(observation.landmarks, aspect_ratio=width / height)
     color = (0, 90, 255) if result.gesture is Gesture.OPEN_PALM else (40, 220, 120)
 
     for start, end in HAND_CONNECTIONS:
@@ -82,11 +89,50 @@ def _draw_hand(
     for point in observation.landmarks:
         cv2.circle(frame, _pixel(point, width, height), 4, color, -1, cv2.LINE_AA)
 
-    title = f"{result.label}  |  {observation.handedness} {observation.confidence:.0%}"
+    shown = display_gesture or result.gesture
+    label = (
+        "PUNO / MODIFICADOR"
+        if shown is Gesture.CLOSED_HAND and result.gesture is Gesture.PINCH
+        else GESTURE_LABELS[shown]
+    )
+    title = f"{label}  |  {observation.handedness} {observation.confidence:.0%}"
     top = 12 + line * 44
     cv2.rectangle(frame, (12, top), (min(width - 12, 520), top + 43), (20, 20, 20), -1)
     cv2.putText(frame, title, (24, top + 31), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2, cv2.LINE_AA)
-    return result
+
+
+def _two_hand_gestures(
+    results: list[GestureResult],
+    observations: list[HandObservation],
+    modifier_wrist: NormalizedPoint | None,
+) -> tuple[Gesture, Gesture]:
+    """Resuelve puño/pinza usando la otra mano y el modificador previo."""
+    gestures = [result.gesture for result in results]
+    if len(gestures) != 2:
+        raise ValueError("Se esperan exactamente dos manos.")
+    if Gesture.OPEN_PALM in gestures:
+        return gestures[0], gestures[1]
+
+    pinch_indexes = [
+        index for index, result in enumerate(results)
+        if result.gesture is Gesture.PINCH
+    ]
+    if len(pinch_indexes) == 2:
+        return gestures[0], gestures[1]
+    if modifier_wrist is not None and pinch_indexes:
+        index = min(
+            pinch_indexes,
+            key=lambda item: distance(observations[item].landmarks[0], modifier_wrist),
+        )
+        gestures[index] = Gesture.CLOSED_HAND
+    elif len(pinch_indexes) == 1:
+        other = 1 - pinch_indexes[0]
+        if gestures[other] in (
+            Gesture.POINTING, Gesture.VICTORY,
+            Gesture.THUMBS_LEFT, Gesture.THUMBS_RIGHT,
+        ):
+            gestures[pinch_indexes[0]] = Gesture.CLOSED_HAND
+    return gestures[0], gestures[1]
 
 
 def run_preview(options: PreviewOptions) -> int:
@@ -126,10 +172,24 @@ def run_preview(options: PreviewOptions) -> int:
                 rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 timestamp_ms = int((monotonic() - started_at) * 1000)
                 observations = tracker.detect(rgb, timestamp_ms)
+                height, width = frame.shape[:2]
                 results = [
-                    _draw_hand(cv2, frame, observation, line=index)
-                    for index, observation in enumerate(observations)
+                    recognize_gesture(observation.landmarks, aspect_ratio=width / height)
+                    for observation in observations
                 ]
+                two_hand_gestures = (
+                    _two_hand_gestures(
+                        results,
+                        observations,
+                        two_hands.modifier_wrist if two_hands is not None else None,
+                    )
+                    if len(observations) == 2 else None
+                )
+                for index, observation in enumerate(observations):
+                    _draw_hand(
+                        cv2, frame, observation, results[index], line=index,
+                        display_gesture=two_hand_gestures[index] if two_hand_gestures else None,
+                    )
 
                 if mouse is not None:
                     f8_is_down = bool(user32.GetAsyncKeyState(0x77) & 0x8000)
@@ -151,13 +211,20 @@ def run_preview(options: PreviewOptions) -> int:
                             zoom.reset()
                             two_hands.reset()
                         else:
-                            gestures = (results[0].gesture, results[1].gesture)
+                            gestures = two_hand_gestures
                             landmarks_pair = (observations[0].landmarks, observations[1].landmarks)
                             if any(
                                 gesture in (Gesture.FIST, Gesture.CLOSED_HAND)
                                 for gesture in gestures
                             ) or two_hands.mode == "switch":
-                                zoom.reset()
+                                if two_hands.mode == "switch":
+                                    zoom.reset()
+                                else:
+                                    zoom.update(
+                                        gestures,
+                                        (landmarks_pair[0][8], landmarks_pair[1][8]),
+                                        armed=mouse.armed,
+                                    )
                                 action = two_hands.update(
                                     gestures,
                                     landmarks_pair,
@@ -225,7 +292,7 @@ def run_preview(options: PreviewOptions) -> int:
                             status = "SCROLL / INDICE + PUNO"
                         elif two_hands.mode == "thumb":
                             status = "DESHACER / REHACER"
-                        elif all(result.gesture is Gesture.PINCH for result in results):
+                        elif two_hand_gestures == (Gesture.PINCH, Gesture.PINCH):
                             status = "ZOOM 2 MANOS"
                         else:
                             status = "2 MANOS"

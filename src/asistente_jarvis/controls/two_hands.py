@@ -46,6 +46,10 @@ class TwoHandController:
         return self._mode
 
     @property
+    def modifier_wrist(self) -> NormalizedPoint | None:
+        return self._fist_wrist if self._mode == "switch" and self._alt_down else None
+
+    @property
     def switch_tilt(self) -> float:
         return self._current_tilt
 
