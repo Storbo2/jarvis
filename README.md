@@ -13,6 +13,8 @@ La versión actual permite:
 - mover el mouse, hacer clic y arrastrar con una mano;
 - copiar y pegar con C y V sostenidas, y seleccionar todo con una V invertida;
 - controlar el zoom con dos pinzas, una en cada mano;
+- recolocar la mano con un puño cerrado;
+- desplazar la página y cambiar de aplicación usando dos manos;
 - liberar el botón y desactivar el control con la palma abierta;
 - mostrar FPS y salir de forma segura con `Q` o `Esc`.
 
@@ -28,7 +30,7 @@ Consulta [GESTURES.md](GESTURES.md) para la lista completa de gestos y funciones
 5. Explorar dictado, formato de puntuación y atajos de teclado.
 6. ~~Añadir acciones de copiar y pegar para los gestos C y V.~~
 
-El STOP global debe liberar cualquier botón sostenido y cancelar acciones activas. No habilitar control del sistema hasta que la vista previa de landmarks sea estable.
+El STOP global libera cualquier botón sostenido y cancela las acciones activas.
 
 ## Requisitos
 
@@ -76,9 +78,9 @@ el cursor más lejos por el mismo desplazamiento de mano (rango admitido: `0.1` 
 Un valor muy alto también amplifica los pequeños temblores.
 
 Para alcanzar zonas lejanas sin aumentar tanto la sensibilidad, usa la
-**recolocación**: señala y mueve el cursor; luego deja de señalar (mano neutra),
-vuelve la mano a una posición cómoda y señala de nuevo. El cursor queda quieto
-mientras recolocas la mano. Puedes repetirlo tantas veces como necesites.
+**recolocación**: señala y mueve el cursor; luego cierra el puño, mueve la mano
+a una posición cómoda y vuelve a señalar. El cursor queda quieto mientras
+recolocas la mano. Puedes repetirlo tantas veces como necesites.
 
 Para copiar, selecciona texto con el mouse y mantén la C durante al menos 0,45
 segundos. Para pegar, enfoca el campo de destino y mantén la V el mismo tiempo.
@@ -97,6 +99,29 @@ del teclado numérico; la aplicación activa debe admitir esos atajos. Con dos
 manos visibles se suspenden los controles de una mano. STOP funciona con
 cualquiera de las dos manos.
 
+Con un puño fijo y el índice de la otra mano puedes desplazar vertical u
+horizontalmente. Con un puño fijo y una V en la otra mano se abre `Alt+Tab`;
+mueve la V a los lados para recorrer las ventanas y suelta el puño para
+seleccionar. STOP, `F8`, `Esc` y la pérdida de una mano sueltan `Alt`.
+
+## Voz preparada para la siguiente fase
+
+La dependencia `faster-whisper` y el modelo convertido `large-v3` se
+preparan con:
+
+```powershell
+uv sync
+uv run asistente-jarvis prepare-speech
+```
+
+El modelo queda en `models/whisper/large-v3/` y no se versiona. Esta fase solo
+descarga los pesos y deja resueltas las librerías: no captura micrófono ni
+transcribe todavía. Para utilizar la GPU con la versión actual de CTranslate2,
+Windows debe poder encontrar CUDA 12 (cuBLAS) y cuDNN 9. Comprueba esa
+compatibilidad cuando implementemos el dictado; el funcionamiento anterior de
+Subtitle Edit no confirma por sí solo que estas DLL estén disponibles para
+este entorno Python.
+
 Al clonar el repositorio, `uv sync` creará el entorno virtual según el `uv.lock`.
 El modelo se guarda en `models/hand_landmarker.task`, una ruta excluida de Git.
 
@@ -111,6 +136,7 @@ Durante la vista previa prueba estos gestos frente a la cámara:
 | Índice y medio extendidos y separados | `V / DOS DEDOS`: pegar |
 | Índice y medio extendidos, separados y apuntando hacia abajo | `A / V INVERTIDA`: seleccionar todo |
 | Mano curvada en forma de C | `C (EXPERIMENTAL)`: copiar |
+| Puño cerrado | `PUNO / RECOLOCAR` |
 
 Si la cámara principal no corresponde al índice `0`, prueba:
 
@@ -137,7 +163,7 @@ src/asistente_jarvis/
   config/    configuración local
   __main__.py
   cli.py
- tests/
+tests/
 data/        datos locales, excluidos de Git
 ```
 

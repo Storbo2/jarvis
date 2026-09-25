@@ -6,6 +6,7 @@ from time import monotonic
 
 from asistente_jarvis.controls.mouse import MouseController, MouseSettings
 from asistente_jarvis.controls.shortcuts import ShortcutController, ShortcutSettings
+from asistente_jarvis.controls.two_hands import TwoHandController
 from asistente_jarvis.controls.zoom import ZoomController
 from asistente_jarvis.gestures.detector import Gesture, GestureResult, recognize_gesture
 from asistente_jarvis.gestures.geometry import NormalizedPoint
@@ -99,6 +100,7 @@ def run_preview(options: PreviewOptions) -> int:
         else None
     )
     zoom = ZoomController() if options.control_mouse else None
+    two_hands = TwoHandController() if options.control_mouse else None
     capture = _open_camera(cv2, options.camera_index, options.backend)
     user32 = ctypes.windll.user32 if mouse is not None else None
     f8_was_down = False
@@ -143,14 +145,27 @@ def run_preview(options: PreviewOptions) -> int:
                         if any(result.gesture is Gesture.OPEN_PALM for result in results):
                             mouse.stop()
                             zoom.reset()
+                            two_hands.reset()
                         else:
-                            action = zoom.update(
-                                (results[0].gesture, results[1].gesture),
-                                (observations[0].landmarks[8], observations[1].landmarks[8]),
-                                armed=mouse.armed,
-                            )
+                            gestures = (results[0].gesture, results[1].gesture)
+                            landmarks_pair = (observations[0].landmarks, observations[1].landmarks)
+                            if Gesture.FIST in gestures:
+                                zoom.reset()
+                                action = two_hands.update(
+                                    gestures,
+                                    landmarks_pair,
+                                    armed=mouse.armed,
+                                )
+                            else:
+                                two_hands.reset()
+                                action = zoom.update(
+                                    gestures,
+                                    (landmarks_pair[0][8], landmarks_pair[1][8]),
+                                    armed=mouse.armed,
+                                )
                     else:
                         zoom.reset()
+                        two_hands.reset()
                         gesture = results[0].gesture if results else None
                         landmarks = observations[0].landmarks if observations else None
                         pinch_ratio = results[0].pinch_ratio if results else None
@@ -176,17 +191,22 @@ def run_preview(options: PreviewOptions) -> int:
                     elif not mouse.armed:
                         status = "PAUSADO"
                     elif len(observations) == 2:
-                        status = "ZOOM 2 MANOS" if all(
-                            result.gesture is Gesture.PINCH for result in results
-                        ) else "2 MANOS"
-                    elif not results or results[0].gesture is Gesture.UNKNOWN:
+                        if two_hands.mode == "switch":
+                            status = "ALT+TAB / V + PUNO"
+                        elif two_hands.mode == "scroll":
+                            status = "SCROLL / INDICE + PUNO"
+                        elif all(result.gesture is Gesture.PINCH for result in results):
+                            status = "ZOOM 2 MANOS"
+                        else:
+                            status = "2 MANOS"
+                    elif not results or results[0].gesture in (Gesture.UNKNOWN, Gesture.FIST):
                         status = "RECOLOCA LA MANO"
                     else:
                         status = "ACTIVO"
                     status_y = 82 + max(0, len(observations) - 1) * 44
                     cv2.putText(
                         frame,
-                        f"MOUSE: {status} | F8 activar/pausar | ESC salir",
+                        f"{status} | F8 pausa | ESC salir",
                         (16, status_y),
                         cv2.FONT_HERSHEY_SIMPLEX,
                         0.55,
@@ -229,6 +249,8 @@ def run_preview(options: PreviewOptions) -> int:
             "al llegar a una esquina de la pantalla."
         ) from exc
     finally:
+        if two_hands is not None:
+            two_hands.reset()
         if mouse is not None:
             mouse.close()
         capture.release()

@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 import sys
 
-from asistente_jarvis.config.paths import DEFAULT_MODEL_PATH
+from asistente_jarvis.config.paths import DEFAULT_MODEL_PATH, DEFAULT_WHISPER_MODEL_PATH
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -61,6 +61,15 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"Ruta de salida (por defecto: {DEFAULT_MODEL_PATH}).",
     )
     download.add_argument("--force", action="store_true", help="Reemplaza un modelo existente.")
+    speech = subparsers.add_parser(
+        "prepare-speech", help="Descarga Whisper large-v3 para la futura fase de dictado."
+    )
+    speech.add_argument(
+        "--output",
+        type=Path,
+        default=DEFAULT_WHISPER_MODEL_PATH,
+        help=f"Directorio del modelo (por defecto: {DEFAULT_WHISPER_MODEL_PATH}).",
+    )
     return parser
 
 
@@ -78,6 +87,13 @@ def main(argv: list[str] | None = None) -> int:
 
             path = download_hand_landmarker(args.output, force=args.force)
             print(f"Modelo disponible en: {path}")
+            return 0
+
+        if args.command == "prepare-speech":
+            from asistente_jarvis.speech.model import download_whisper_large_v3
+
+            path = download_whisper_large_v3(args.output)
+            print(f"Whisper large-v3 disponible en: {path}")
             return 0
 
         if args.command in ("preview", "control"):

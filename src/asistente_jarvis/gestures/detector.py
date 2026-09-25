@@ -15,6 +15,7 @@ class Gesture(StrEnum):
     VICTORY = "victory"
     SELECT_ALL = "select_all"
     LETTER_C = "letter_c"
+    FIST = "fist"
     UNKNOWN = "unknown"
 
 
@@ -26,6 +27,7 @@ GESTURE_LABELS = {
     Gesture.VICTORY: "V / DOS DEDOS",
     Gesture.SELECT_ALL: "A / V INVERTIDA",
     Gesture.LETTER_C: "C (EXPERIMENTAL)",
+    Gesture.FIST: "PUNO / RECOLOCAR",
     Gesture.UNKNOWN: "NEUTRO",
 }
 
@@ -76,8 +78,16 @@ def recognize_gesture(points: Sequence[NormalizedPoint]) -> GestureResult:
     pinch_ratio = distance(points[4], points[8]) / palm_scale
 
     folded_others = not any(extended[name] for name in ("index", "middle", "ring", "pinky"))
+    compact_fist = (
+        folded_others
+        and not extended["thumb"]
+        and distance(points[8], points[5]) / palm_scale < 0.75
+        and distance(points[12], points[9]) / palm_scale < 0.75
+    )
     if all(extended[name] for name in ("index", "middle", "ring", "pinky")):
         gesture = Gesture.OPEN_PALM
+    elif compact_fist:
+        gesture = Gesture.FIST
     elif pinch_ratio <= 0.42:
         gesture = Gesture.PINCH
     elif (
@@ -111,6 +121,8 @@ def recognize_gesture(points: Sequence[NormalizedPoint]) -> GestureResult:
         and 90 <= joint_angle(points[5], points[6], points[8]) < 155
     ):
         gesture = Gesture.LETTER_C
+    elif folded_others and not extended["thumb"]:
+        gesture = Gesture.FIST
     else:
         gesture = Gesture.UNKNOWN
 

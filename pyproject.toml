@@ -5,6 +5,8 @@ description = "Experimento de control de Windows mediante gestos de mano y voz"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 dependencies = [
+    "faster-whisper>=1.1,<2",
+    "huggingface-hub>=0.30,<2",
     "mediapipe>=0.10.21,<2",
     "opencv-contrib-python>=4.10,<5",
     "pyautogui>=0.9.54,<1",

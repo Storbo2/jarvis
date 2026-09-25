@@ -148,6 +148,15 @@ class MouseController:
                 self._move_to((self._pinch_screen_origin[0] + dx, self._pinch_screen_origin[1] + dy))
             return
 
+        if gesture is Gesture.FIST and self._pinch_started is not None:
+            # Al cerrar la mano para recolocarla, una pinza transitoria no debe hacer clic.
+            self._release()
+            self._pinch_started = None
+            self._pinch_anchor = None
+            self._pinch_screen_origin = None
+            self._target_position = None
+            self._pointing_anchor = None
+
         if self._pinch_started is not None:
             was_dragging = self._pressed
             self._release()
