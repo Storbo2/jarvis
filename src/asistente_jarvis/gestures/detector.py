@@ -99,16 +99,16 @@ def recognize_gesture(points: Sequence[NormalizedPoint]) -> GestureResult:
     elif (
         extended["thumb"]
         and folded_others
-        and points[4].y < points[2].y - palm_scale * 0.35
+        and abs(points[4].x - points[2].x) / palm_scale >= 0.3
+        and abs(points[4].x - points[2].x) > abs(points[4].y - points[2].y)
     ):
-        gesture = Gesture.THUMBS_UP
+        gesture = Gesture.THUMBS_RIGHT if points[4].x > points[2].x else Gesture.THUMBS_LEFT
     elif (
         extended["thumb"]
         and folded_others
-        and abs(points[4].y - points[2].y) / palm_scale < 0.5
-        and abs(points[4].x - points[2].x) / palm_scale >= 0.35
+        and points[4].y < points[2].y - palm_scale * 0.35
     ):
-        gesture = Gesture.THUMBS_RIGHT if points[4].x > points[2].x else Gesture.THUMBS_LEFT
+        gesture = Gesture.THUMBS_UP
     elif (
         extended["thumb"]
         and extended["index"]

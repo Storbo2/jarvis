@@ -102,14 +102,16 @@ cualquiera de las dos manos.
 
 Con un puño fijo y el índice de la otra mano puedes desplazar vertical u
 horizontalmente. Con un puño fijo y una V en la otra mano se abre `Alt+Tab`;
-inclina la muñeca con la V hacia un lado para recorrer las ventanas. Mantener
+inclina la mano en el plano de la cámara hacia un lado para recorrer las ventanas. Mantener
 la inclinación repite los pasos sin exigir un desplazamiento largo de la mano.
 Suelta el puño para seleccionar. STOP, `F8`, `Esc` y la pérdida de una mano
 sueltan `Alt`. Con un puño y el pulgar de la otra mano hacia la izquierda o la
 derecha se envía `Ctrl+Z` o `Ctrl+Y`, respectivamente.
 
 Mantener `ILoveYou` con una mano durante 0,45 segundos abre el recorte de
-pantalla de Windows (`Win+Shift+S`). Los comandos puntuales muestran un aviso
+pantalla de Windows (`Win+Shift+S`). Señala con el índice para colocar el cursor,
+luego haz una pinza, mueve la mano sin soltarla y abre la pinza para completar
+el recorte. Esta pinza inicia el arrastre de inmediato. Los comandos puntuales muestran un aviso
 pequeño sobre el escritorio durante 1,6 segundos, también cuando trabajas en
 otra ventana.
 

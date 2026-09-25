@@ -15,6 +15,7 @@ class MouseSettings:
     jitter_pixels: float = 1.5
     drag_delay_seconds: float = 0.45
     lost_hand_seconds: float = 0.35
+    snip_timeout_seconds: float = 30.0
 
 
 class MouseController:
@@ -39,25 +40,45 @@ class MouseController:
         self._pointing_anchor: NormalizedPoint | None = None
         self._pinch_anchor: NormalizedPoint | None = None
         self._pinch_screen_origin: tuple[float, float] | None = None
+        self._snip_deadline: float | None = None
+        self._snip_ready = False
+        self._snip_dragging = False
 
     @property
     def dragging(self) -> bool:
         return self._pressed
 
+    @property
+    def snip_mode(self) -> bool:
+        return self._snip_deadline is not None or self._snip_dragging
+
+    def begin_snip(self) -> None:
+        """La primera pinza tras abrir Recortes inicia un arrastre inmediato."""
+        self._snip_deadline = monotonic() + self.settings.snip_timeout_seconds
+        self._snip_ready = False
+        self._snip_dragging = False
+
     def arm(self) -> None:
         self.armed = True
         self._clear_tracking()
+        self._snip_deadline = None
+        self._snip_ready = False
+        self._snip_dragging = False
         self._last_seen = monotonic()
 
     def stop(self) -> None:
         self.armed = False
         self._clear_tracking()
         self._last_seen = None
+        self._snip_deadline = None
+        self._snip_ready = False
         self._release()
 
     def cancel_gesture(self) -> None:
         """Cancela clic/arrastre pendientes sin desarmar el control."""
         self._clear_tracking()
+        self._snip_deadline = None
+        self._snip_ready = False
         self._release()
 
     def _clear_tracking(self) -> None:
@@ -79,6 +100,7 @@ class MouseController:
                 import ctypes
 
                 ctypes.windll.user32.mouse_event(0x0004, 0, 0, 0, 0)
+        self._snip_dragging = False
 
     def _current_position(self) -> tuple[float, float]:
         position = self._mouse.position()
@@ -112,6 +134,9 @@ class MouseController:
         now: float | None = None,
     ) -> None:
         now = monotonic() if now is None else now
+        if self._snip_deadline is not None and now >= self._snip_deadline:
+            self._snip_deadline = None
+            self._snip_ready = False
 
         if gesture is Gesture.OPEN_PALM:
             self.stop()
@@ -130,6 +155,8 @@ class MouseController:
             return
 
         if gesture is Gesture.PINCH:
+            if self._snip_deadline is not None and not self._snip_ready:
+                return
             if self._pinch_started is None:
                 self._pinch_started = now
                 self._pinch_anchor = landmarks[9]
@@ -137,6 +164,12 @@ class MouseController:
                 self._last_position = self._pinch_screen_origin
                 self._target_position = self._pinch_screen_origin
                 self._pointing_anchor = None
+                if self._snip_deadline is not None:
+                    self._mouse.mouseDown(button="left")
+                    self._pressed = True
+                    self._snip_dragging = True
+                    self._snip_deadline = None
+                    self._snip_ready = False
             elif not self._pressed and now - self._pinch_started >= self.settings.drag_delay_seconds:
                 self._mouse.mouseDown(button="left")
                 self._pressed = True
@@ -174,6 +207,8 @@ class MouseController:
                 self._pointing_anchor = None
                 self._target_position = None
                 return
+            if self._snip_deadline is not None:
+                self._snip_ready = True
             tip = landmarks[8]
             if self._pointing_anchor is None:
                 self._pointing_anchor = tip

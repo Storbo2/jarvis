@@ -153,7 +153,7 @@ def run_preview(options: PreviewOptions) -> int:
                         else:
                             gestures = (results[0].gesture, results[1].gesture)
                             landmarks_pair = (observations[0].landmarks, observations[1].landmarks)
-                            if Gesture.FIST in gestures:
+                            if Gesture.FIST in gestures or two_hands.mode == "switch":
                                 zoom.reset()
                                 action = two_hands.update(
                                     gestures,
@@ -189,18 +189,35 @@ def run_preview(options: PreviewOptions) -> int:
                         shortcut_feedback = None
                     if action is not None:
                         shortcut_feedback = (action, monotonic())
+                        if action.startswith("Recorte"):
+                            mouse.begin_snip()
                         if overlay is not None and (
-                            action.startswith("Ctrl+") or action.startswith("Recorte")
+                            action.startswith("Ctrl+")
+                            or action.startswith("Recorte")
+                            or action.startswith("Alt+Tab")
+                            or action.startswith("Ventana")
                         ):
-                            overlay.show(action)
+                            overlay.show(
+                                "Recorte: señala, pinza y arrastra"
+                                if action.startswith("Recorte")
+                                else "Alt+Tab: inclina V a un lado"
+                                if action.startswith("Alt+Tab")
+                                else action
+                            )
 
                     if mouse.dragging:
-                        status = "ARRASTRANDO"
+                        status = "RECORTANDO" if mouse.snip_mode else "ARRASTRANDO"
                     elif not mouse.armed:
                         status = "PAUSADO"
+                    elif mouse.snip_mode:
+                        status = "RECORTE: INDICE, LUEGO PINZA"
                     elif len(observations) == 2:
                         if two_hands.mode == "switch":
-                            status = "ALT+TAB / GIRA LA V"
+                            side = "DER" if two_hands.switch_tilt >= 0 else "IZQ"
+                            status = (
+                                f"ALT+TAB: {side} {abs(two_hands.switch_tilt):.0f}"
+                                "/14 GRADOS"
+                            )
                         elif two_hands.mode == "scroll":
                             status = "SCROLL / INDICE + PUNO"
                         elif two_hands.mode == "thumb":

@@ -6,16 +6,17 @@ from math import atan2, degrees
 from time import monotonic
 
 from asistente_jarvis.gestures.detector import Gesture
-from asistente_jarvis.gestures.geometry import NormalizedPoint
+from asistente_jarvis.gestures.geometry import NormalizedPoint, distance
 
 
 @dataclass(frozen=True, slots=True)
 class TwoHandSettings:
     scroll_step: float = 0.045
     switch_hold_seconds: float = 0.35
-    switch_tilt_degrees: float = 25.0
+    switch_tilt_degrees: float = 14.0
     switch_interval_seconds: float = 0.32
     thumb_hold_seconds: float = 0.45
+    fist_grace_seconds: float = 0.2
 
 
 class TwoHandController:
@@ -36,10 +37,17 @@ class TwoHandController:
         self._thumb_candidate_at: float | None = None
         self._thumb_fired = False
         self._alt_down = False
+        self._current_tilt = 0.0
+        self._fist_wrist: NormalizedPoint | None = None
+        self._fist_last_seen_at: float | None = None
 
     @property
     def mode(self) -> str | None:
         return self._mode
+
+    @property
+    def switch_tilt(self) -> float:
+        return self._current_tilt
 
     def reset(self) -> None:
         self._mode = None
@@ -50,6 +58,9 @@ class TwoHandController:
         self._thumb_candidate = None
         self._thumb_candidate_at = None
         self._thumb_fired = False
+        self._current_tilt = 0.0
+        self._fist_wrist = None
+        self._fist_last_seen_at = None
         if self._alt_down:
             self._release_key("alt", 0x12)
             self._alt_down = False
@@ -102,6 +113,7 @@ class TwoHandController:
             self._mode = "switch"
             self._switch_candidate_at = now
             self._switch_neutral_angle = angle
+            self._current_tilt = 0.0
             return None
 
         if not self._alt_down:
@@ -117,6 +129,7 @@ class TwoHandController:
             self._switch_neutral_angle = angle
             return None
         tilt = (angle - self._switch_neutral_angle + 180) % 360 - 180
+        self._current_tilt = tilt
         if abs(tilt) < self.settings.switch_tilt_degrees:
             self._last_switch_at = float("-inf")
             return None
@@ -165,19 +178,32 @@ class TwoHandController:
             return None
 
         fist_indexes = [index for index, gesture in enumerate(gestures) if gesture is Gesture.FIST]
-        if len(fist_indexes) != 1:
+        if len(fist_indexes) == 1:
+            fist_index = fist_indexes[0]
+            self._fist_wrist = landmarks[fist_index][0]
+            self._fist_last_seen_at = now
+        elif (
+            self._alt_down
+            and not fist_indexes
+            and self._fist_wrist is not None
+            and self._fist_last_seen_at is not None
+            and now - self._fist_last_seen_at <= self.settings.fist_grace_seconds
+        ):
+            fist_index = min(
+                range(2),
+                key=lambda index: distance(landmarks[index][0], self._fist_wrist),
+            )
+        else:
             self.reset()
             return None
-        active_index = 1 - fist_indexes[0]
+        active_index = 1 - fist_index
         active_gesture = gestures[active_index]
         active_points = landmarks[active_index]
 
         if self._alt_down:
-            # Alt permanece presionado mientras el puño y ambas manos sigan visibles.
-            if active_gesture is Gesture.VICTORY:
-                return self._switch(active_points, now)
+            # Al inclinar la V su etiqueta puede fluctuar; el puño conserva Alt.
             if active_gesture not in (Gesture.THUMBS_LEFT, Gesture.THUMBS_RIGHT):
-                return None
+                return self._switch(active_points, now)
             self.reset()
 
         if active_gesture is Gesture.POINTING:

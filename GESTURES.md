@@ -53,13 +53,15 @@ cursor; algunas aplicaciones no admiten desplazamiento horizontal.
 
 Para cambiar aplicaciones, mantén un puño fijo y forma una V con la otra mano
 durante 0,35 s. Se mantiene `Alt` y se pulsa `Tab` una vez para abrir el
-selector. Inclina la muñeca con la V unos 25° hacia la derecha para avanzar o
+selector. Inclina la mano en el plano de la cámara unos 14° hacia la derecha para avanzar o
 hacia la izquierda para retroceder. Si mantienes la inclinación, se repite un
 paso aproximadamente cada 0,32 s y puedes recorrer muchas ventanas sin
 desplazar el brazo. Devuelve la V a su orientación inicial para detener los
 pasos. Suelta el puño, haz STOP, pausa con `F8` o retira una mano para soltar
-`Alt` y escoger la ventana visible. La inclinación se mide en el plano de la
-cámara; no hace falta girar la palma para mostrar su dorso.
+`Alt` y escoger la ventana visible. La cámara indica el giro medido y el umbral
+de 14 grados. Puedes inclinar toda la mano y el antebrazo; girar la palma para
+mostrar su dorso no produce este movimiento. Una vez abierto el selector, se
+sigue el giro aunque el detector deje de mostrar la etiqueta `V` por un instante.
 
 Para deshacer o rehacer, mantén un puño y extiende el pulgar de la otra mano
 hacia un lado durante 0,45 s. El atajo se envía una vez por postura; vuelve a
@@ -69,6 +71,13 @@ la imagen reflejada que muestra la cámara de forma predeterminada.
 Los atajos puntuales como copiar, pegar, deshacer, rehacer, seleccionar todo y
 recortar pantalla muestran un aviso pequeño sobre el escritorio durante 1,6 s.
 El aviso no cambia el foco de la aplicación ni bloquea clics.
+
+Para recortar, forma `ILoveYou` hasta que aparezca la interfaz de Recortes.
+Señala con el índice para colocar el cursor en una esquina de la zona deseada.
+Forma una pinza y, sin soltarla, mueve la mano hasta la esquina opuesta; al
+abrir la pinza se completa el recorte. En este modo la pinza inicia el arrastre
+de inmediato, sin esperar los 0,45 s del arrastre normal. El modo caduca después
+de 30 s o al hacer STOP o pulsar `F8`.
 
 ## Gestos que MediaPipe ofrece por separado
 
