@@ -5,6 +5,7 @@ from pathlib import Path
 from time import monotonic
 
 from asistente_jarvis.controls.mouse import MouseController, MouseSettings
+from asistente_jarvis.controls.overlay import CommandOverlay
 from asistente_jarvis.controls.shortcuts import ShortcutController, ShortcutSettings
 from asistente_jarvis.controls.two_hands import TwoHandController
 from asistente_jarvis.controls.zoom import ZoomController
@@ -102,6 +103,7 @@ def run_preview(options: PreviewOptions) -> int:
     zoom = ZoomController() if options.control_mouse else None
     two_hands = TwoHandController() if options.control_mouse else None
     capture = _open_camera(cv2, options.camera_index, options.backend)
+    overlay: CommandOverlay | None = None
     user32 = ctypes.windll.user32 if mouse is not None else None
     f8_was_down = False
     started_at = monotonic()
@@ -111,6 +113,8 @@ def run_preview(options: PreviewOptions) -> int:
     waiting_for_pinch_release = False
 
     try:
+        if mouse is not None:
+            overlay = CommandOverlay()
         with HandTracker(options.model_path, num_hands=2) as tracker:
             while True:
                 ok, frame = capture.read()
@@ -185,6 +189,10 @@ def run_preview(options: PreviewOptions) -> int:
                         shortcut_feedback = None
                     if action is not None:
                         shortcut_feedback = (action, monotonic())
+                        if overlay is not None and (
+                            action.startswith("Ctrl+") or action.startswith("Recorte")
+                        ):
+                            overlay.show(action)
 
                     if mouse.dragging:
                         status = "ARRASTRANDO"
@@ -192,9 +200,11 @@ def run_preview(options: PreviewOptions) -> int:
                         status = "PAUSADO"
                     elif len(observations) == 2:
                         if two_hands.mode == "switch":
-                            status = "ALT+TAB / V + PUNO"
+                            status = "ALT+TAB / GIRA LA V"
                         elif two_hands.mode == "scroll":
                             status = "SCROLL / INDICE + PUNO"
+                        elif two_hands.mode == "thumb":
+                            status = "DESHACER / REHACER"
                         elif all(result.gesture is Gesture.PINCH for result in results):
                             status = "ZOOM 2 MANOS"
                         else:
@@ -227,6 +237,8 @@ def run_preview(options: PreviewOptions) -> int:
                         )
 
                 now = monotonic()
+                if overlay is not None:
+                    overlay.update()
                 instant_fps = 1 / max(now - last_frame_at, 1e-6)
                 fps = instant_fps if fps == 0 else fps * 0.9 + instant_fps * 0.1
                 last_frame_at = now
@@ -249,6 +261,8 @@ def run_preview(options: PreviewOptions) -> int:
             "al llegar a una esquina de la pantalla."
         ) from exc
     finally:
+        if overlay is not None:
+            overlay.close()
         if two_hands is not None:
             two_hands.reset()
         if mouse is not None:

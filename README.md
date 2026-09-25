@@ -9,12 +9,13 @@ La versión actual permite:
 - abrir una cámara conectada al equipo;
 - detectar hasta dos manos y dibujar sus 21 landmarks;
 - mostrar lateralidad y confianza de la detección;
-- reconocer índice, pinza y palma abierta, además de pulgar arriba, V y C;
+- reconocer índice, pinza y palma abierta, además de pulgar arriba, pulgar lateral, V, C e `ILoveYou`;
 - mover el mouse, hacer clic y arrastrar con una mano;
 - copiar y pegar con C y V sostenidas, y seleccionar todo con una V invertida;
 - controlar el zoom con dos pinzas, una en cada mano;
 - recolocar la mano con un puño cerrado;
-- desplazar la página y cambiar de aplicación usando dos manos;
+- desplazar la página, cambiar de aplicación y deshacer o rehacer usando dos manos;
+- iniciar el recorte de pantalla con `ILoveYou` y mostrar avisos breves sobre el escritorio;
 - liberar el botón y desactivar el control con la palma abierta;
 - mostrar FPS y salir de forma segura con `Q` o `Esc`.
 
@@ -101,8 +102,16 @@ cualquiera de las dos manos.
 
 Con un puño fijo y el índice de la otra mano puedes desplazar vertical u
 horizontalmente. Con un puño fijo y una V en la otra mano se abre `Alt+Tab`;
-mueve la V a los lados para recorrer las ventanas y suelta el puño para
-seleccionar. STOP, `F8`, `Esc` y la pérdida de una mano sueltan `Alt`.
+inclina la muñeca con la V hacia un lado para recorrer las ventanas. Mantener
+la inclinación repite los pasos sin exigir un desplazamiento largo de la mano.
+Suelta el puño para seleccionar. STOP, `F8`, `Esc` y la pérdida de una mano
+sueltan `Alt`. Con un puño y el pulgar de la otra mano hacia la izquierda o la
+derecha se envía `Ctrl+Z` o `Ctrl+Y`, respectivamente.
+
+Mantener `ILoveYou` con una mano durante 0,45 segundos abre el recorte de
+pantalla de Windows (`Win+Shift+S`). Los comandos puntuales muestran un aviso
+pequeño sobre el escritorio durante 1,6 segundos, también cuando trabajas en
+otra ventana.
 
 ## Voz preparada para la siguiente fase
 
@@ -137,6 +146,8 @@ Durante la vista previa prueba estos gestos frente a la cámara:
 | Índice y medio extendidos, separados y apuntando hacia abajo | `A / V INVERTIDA`: seleccionar todo |
 | Mano curvada en forma de C | `C (EXPERIMENTAL)`: copiar |
 | Puño cerrado | `PUNO / RECOLOCAR` |
+| Pulgar extendido a un lado | `PULGAR IZQUIERDA` o `PULGAR DERECHA` |
+| Pulgar, índice y meñique extendidos | `ILOVEYOU / RECORTE` |
 
 Si la cámara principal no corresponde al índice `0`, prueba:
 

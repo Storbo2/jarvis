@@ -12,7 +12,10 @@ class Gesture(StrEnum):
     PINCH = "pinch"
     POINTING = "pointing"
     THUMBS_UP = "thumbs_up"
+    THUMBS_LEFT = "thumbs_left"
+    THUMBS_RIGHT = "thumbs_right"
     VICTORY = "victory"
+    I_LOVE_YOU = "i_love_you"
     SELECT_ALL = "select_all"
     LETTER_C = "letter_c"
     FIST = "fist"
@@ -24,7 +27,10 @@ GESTURE_LABELS = {
     Gesture.PINCH: "PINZA",
     Gesture.POINTING: "INDICE",
     Gesture.THUMBS_UP: "PULGAR ARRIBA",
+    Gesture.THUMBS_LEFT: "PULGAR IZQUIERDA",
+    Gesture.THUMBS_RIGHT: "PULGAR DERECHA",
     Gesture.VICTORY: "V / DOS DEDOS",
+    Gesture.I_LOVE_YOU: "ILOVEYOU / RECORTE",
     Gesture.SELECT_ALL: "A / V INVERTIDA",
     Gesture.LETTER_C: "C (EXPERIMENTAL)",
     Gesture.FIST: "PUNO / RECOLOCAR",
@@ -96,6 +102,21 @@ def recognize_gesture(points: Sequence[NormalizedPoint]) -> GestureResult:
         and points[4].y < points[2].y - palm_scale * 0.35
     ):
         gesture = Gesture.THUMBS_UP
+    elif (
+        extended["thumb"]
+        and folded_others
+        and abs(points[4].y - points[2].y) / palm_scale < 0.5
+        and abs(points[4].x - points[2].x) / palm_scale >= 0.35
+    ):
+        gesture = Gesture.THUMBS_RIGHT if points[4].x > points[2].x else Gesture.THUMBS_LEFT
+    elif (
+        extended["thumb"]
+        and extended["index"]
+        and extended["pinky"]
+        and not extended["middle"]
+        and not extended["ring"]
+    ):
+        gesture = Gesture.I_LOVE_YOU
     elif (
         extended["index"]
         and extended["middle"]

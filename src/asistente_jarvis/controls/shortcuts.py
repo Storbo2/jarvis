@@ -99,6 +99,7 @@ class ShortcutController:
             Gesture.LETTER_C,
             Gesture.VICTORY,
             Gesture.SELECT_ALL,
+            Gesture.I_LOVE_YOU,
         ):
             self.reset()
             return None
@@ -116,6 +117,11 @@ class ShortcutController:
         if now - self._last_action_at < self.settings.cooldown_seconds:
             return None
 
+        if gesture is Gesture.I_LOVE_YOU:
+            self._keyboard.hotkey("win", "shift", "s")
+            self._fired = True
+            self._last_action_at = now
+            return "Recorte de pantalla activado"
         if gesture is Gesture.LETTER_C:
             key = "c"
         elif gesture is Gesture.VICTORY:

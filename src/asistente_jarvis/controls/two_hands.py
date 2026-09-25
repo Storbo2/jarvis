@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ctypes
 from dataclasses import dataclass
+from math import atan2, degrees
 from time import monotonic
 
 from asistente_jarvis.gestures.detector import Gesture
@@ -11,13 +12,14 @@ from asistente_jarvis.gestures.geometry import NormalizedPoint
 @dataclass(frozen=True, slots=True)
 class TwoHandSettings:
     scroll_step: float = 0.045
-    switch_step: float = 0.09
     switch_hold_seconds: float = 0.35
-    switch_interval_seconds: float = 0.18
+    switch_tilt_degrees: float = 25.0
+    switch_interval_seconds: float = 0.32
+    thumb_hold_seconds: float = 0.45
 
 
 class TwoHandController:
-    """Puño como modificador: índice para scroll o V para cambiar ventanas."""
+    """Puño como modificador: índice, V inclinada o pulgar lateral."""
 
     def __init__(self, settings: TwoHandSettings | None = None) -> None:
         import pyautogui
@@ -28,7 +30,11 @@ class TwoHandController:
         self._anchor: NormalizedPoint | None = None
         self._axis: str | None = None
         self._switch_candidate_at: float | None = None
+        self._switch_neutral_angle: float | None = None
         self._last_switch_at = float("-inf")
+        self._thumb_candidate: Gesture | None = None
+        self._thumb_candidate_at: float | None = None
+        self._thumb_fired = False
         self._alt_down = False
 
     @property
@@ -40,6 +46,10 @@ class TwoHandController:
         self._anchor = None
         self._axis = None
         self._switch_candidate_at = None
+        self._switch_neutral_angle = None
+        self._thumb_candidate = None
+        self._thumb_candidate_at = None
+        self._thumb_fired = False
         if self._alt_down:
             self._release_key("alt", 0x12)
             self._alt_down = False
@@ -79,11 +89,19 @@ class TwoHandController:
         self._anchor = tip
         return "Scroll horizontal" if self._axis == "horizontal" else "Scroll vertical"
 
-    def _switch(self, tip: NormalizedPoint, now: float) -> str | None:
+    @staticmethod
+    def _wrist_angle(points: tuple[NormalizedPoint, ...]) -> float:
+        wrist = points[0]
+        palm_x = (points[5].x + points[17].x) / 2
+        palm_y = (points[5].y + points[17].y) / 2
+        return degrees(atan2(palm_y - wrist.y, palm_x - wrist.x))
+
+    def _switch(self, points: tuple[NormalizedPoint, ...], now: float) -> str | None:
+        angle = self._wrist_angle(points)
         if self._mode != "switch":
             self._mode = "switch"
             self._switch_candidate_at = now
-            self._anchor = tip
+            self._switch_neutral_angle = angle
             return None
 
         if not self._alt_down:
@@ -93,16 +111,18 @@ class TwoHandController:
             self._alt_down = True
             self._keyboard.press("tab")
             self._last_switch_at = now
-            self._anchor = tip
             return "Alt+Tab activo"
 
-        if self._anchor is None:
-            self._anchor = tip
+        if self._switch_neutral_angle is None:
+            self._switch_neutral_angle = angle
             return None
-        dx = tip.x - self._anchor.x
-        if abs(dx) < self.settings.switch_step or now - self._last_switch_at < self.settings.switch_interval_seconds:
+        tilt = (angle - self._switch_neutral_angle + 180) % 360 - 180
+        if abs(tilt) < self.settings.switch_tilt_degrees:
+            self._last_switch_at = float("-inf")
             return None
-        if dx > 0:
+        if now - self._last_switch_at < self.settings.switch_interval_seconds:
+            return None
+        if tilt > 0:
             self._keyboard.press("tab")
             action = "Ventana siguiente"
         else:
@@ -113,8 +133,23 @@ class TwoHandController:
                 self._release_key("shift", 0x10)
             action = "Ventana anterior"
         self._last_switch_at = now
-        self._anchor = tip
         return action
+
+    def _thumb_shortcut(self, gesture: Gesture, now: float) -> str | None:
+        if self._mode != "thumb" or self._thumb_candidate is not gesture:
+            self._mode = "thumb"
+            self._thumb_candidate = gesture
+            self._thumb_candidate_at = now
+            self._thumb_fired = False
+            return None
+        if self._thumb_fired or self._thumb_candidate_at is None:
+            return None
+        if now - self._thumb_candidate_at < self.settings.thumb_hold_seconds:
+            return None
+        key = "z" if gesture is Gesture.THUMBS_LEFT else "y"
+        self._keyboard.hotkey("ctrl", key)
+        self._thumb_fired = True
+        return f"Ctrl+{key.upper()} enviado"
 
     def update(
         self,
@@ -140,22 +175,17 @@ class TwoHandController:
         if self._alt_down:
             # Alt permanece presionado mientras el puño y ambas manos sigan visibles.
             if active_gesture is Gesture.VICTORY:
-                midpoint = NormalizedPoint(
-                    (active_points[8].x + active_points[12].x) / 2,
-                    (active_points[8].y + active_points[12].y) / 2,
-                )
-                return self._switch(midpoint, now)
-            self._anchor = None
-            return None
+                return self._switch(active_points, now)
+            if active_gesture not in (Gesture.THUMBS_LEFT, Gesture.THUMBS_RIGHT):
+                return None
+            self.reset()
 
         if active_gesture is Gesture.POINTING:
             return self._scroll(active_points[8])
         if active_gesture is Gesture.VICTORY:
-            midpoint = NormalizedPoint(
-                (active_points[8].x + active_points[12].x) / 2,
-                (active_points[8].y + active_points[12].y) / 2,
-            )
-            return self._switch(midpoint, now)
+            return self._switch(active_points, now)
+        if active_gesture in (Gesture.THUMBS_LEFT, Gesture.THUMBS_RIGHT):
+            return self._thumb_shortcut(active_gesture, now)
 
         self.reset()
         return None
