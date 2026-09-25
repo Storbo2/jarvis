@@ -13,7 +13,7 @@ La versión actual permite:
 - mover el mouse, hacer clic y arrastrar con una mano;
 - copiar y pegar con C y V sostenidas, y seleccionar todo con una V invertida;
 - controlar el zoom con dos pinzas, una en cada mano;
-- recolocar la mano con un puño cerrado;
+- recolocar la mano con un puño frontal, sin interferir con la pinza;
 - desplazar la página, cambiar de aplicación y deshacer o rehacer usando dos manos;
 - iniciar el recorte de pantalla con `ILoveYou` y mostrar avisos breves sobre el escritorio;
 - liberar el botón y desactivar el control con la palma abierta;
@@ -79,9 +79,11 @@ el cursor más lejos por el mismo desplazamiento de mano (rango admitido: `0.1` 
 Un valor muy alto también amplifica los pequeños temblores.
 
 Para alcanzar zonas lejanas sin aumentar tanto la sensibilidad, usa la
-**recolocación**: señala y mueve el cursor; luego cierra el puño, mueve la mano
-a una posición cómoda y vuelve a señalar. El cursor queda quieto mientras
-recolocas la mano. Puedes repetirlo tantas veces como necesites.
+**recolocación**: señala y mueve el cursor; luego cierra el puño con los
+nudillos apuntando a la cámara, como si fueras a golpear la pantalla. Mueve
+la mano a una posición cómoda y vuelve a señalar. El cursor queda quieto
+mientras recolocas la mano. Una mano cerrada sin esa orientación se muestra
+como `MANO CERRADA` y no tiene prioridad sobre la pinza.
 
 Para copiar, selecciona texto con el mouse y mantén la C durante al menos 0,45
 segundos. Para pegar, enfoca el campo de destino y mantén la V el mismo tiempo.
@@ -147,7 +149,8 @@ Durante la vista previa prueba estos gestos frente a la cámara:
 | Índice y medio extendidos y separados | `V / DOS DEDOS`: pegar |
 | Índice y medio extendidos, separados y apuntando hacia abajo | `A / V INVERTIDA`: seleccionar todo |
 | Mano curvada en forma de C | `C (EXPERIMENTAL)`: copiar |
-| Puño cerrado | `PUNO / RECOLOCAR` |
+| Puño con nudillos hacia la cámara | `PUNO FRONTAL / RECOLOCAR` |
+| Mano cerrada normal | `MANO CERRADA` |
 | Pulgar extendido a un lado | `PULGAR IZQUIERDA` o `PULGAR DERECHA` |
 | Pulgar, índice y meñique extendidos | `ILOVEYOU / RECORTE` |
 

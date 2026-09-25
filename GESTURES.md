@@ -9,7 +9,8 @@ El control comienza pausado; `F8` lo activa o pausa. `Esc` cierra el programa.
 | Gesto | Función | Estado |
 |---|---|---|
 | Índice extendido | Mover el cursor de forma relativa | Disponible |
-| Puño cerrado | Recolocar la mano sin mover el cursor; vuelve a señalar para seguir | Disponible |
+| Puño con los nudillos apuntando a la cámara | Recolocar la mano sin mover el cursor; vuelve a señalar para seguir | Disponible |
+| Mano cerrada normal | Deja el cursor quieto; sirve como modificador de dos manos | Disponible |
 | Pinza breve | Clic izquierdo al soltar, sin desplazar el cursor | Disponible |
 | Pinza sostenida al menos 0,45 s | Arrastrar; soltar la pinza termina el arrastre | Disponible |
 | Cuatro dedos largos extendidos, juntos o separados | STOP: libera el mouse y pausa el control | Disponible |
@@ -24,6 +25,13 @@ Word, Excel y PowerPoint de escritorio; usa `Ctrl+A` en las demás aplicaciones.
 Esta elección se basa en el programa de la ventana activa, no en el
 idioma del teclado. Si una aplicación usa otro atajo, ejecuta `control` con
 `--select-all-mode ctrl-a` o `--select-all-mode ctrl-e`.
+
+Para recolocar, orienta los nudillos hacia la cámara como si fueras a golpear
+la pantalla. La etiqueta debe decir `PUNO FRONTAL / RECOLOCAR`. Una mano
+simplemente cerrada se muestra como `MANO CERRADA`: también deja quieto el
+cursor, pero no interrumpe la detección de una pinza que se está formando.
+Una fluctuación breve de la distancia entre pulgar e índice tampoco corta un
+arrastre; abrir la pinza lo termina.
 
 ## Dos manos
 
@@ -46,7 +54,8 @@ zoom. Al desaparecer una mano, la pinza restante no inicia un clic hasta que
 se suelte. El efecto de zoom depende de que la aplicación activa admita estos
 atajos.
 
-Para desplazar, mantén un puño fijo y señala con la otra mano. La primera
+Para desplazar, mantén un puño fijo y señala con la otra mano. El modificador
+de dos manos admite tanto el puño normal como el frontal. La primera
 dirección predominante fija el eje del desplazamiento. Para cambiar de eje,
 deja de señalar y vuelve a señalar. La rueda actúa sobre la ventana bajo el
 cursor; algunas aplicaciones no admiten desplazamiento horizontal.

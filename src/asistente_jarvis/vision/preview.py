@@ -67,7 +67,7 @@ def _draw_hand(
     cv2: object, frame: object, observation: HandObservation, *, line: int = 0
 ) -> GestureResult:
     height, width = frame.shape[:2]
-    result = recognize_gesture(observation.landmarks)
+    result = recognize_gesture(observation.landmarks, aspect_ratio=width / height)
     color = (0, 90, 255) if result.gesture is Gesture.OPEN_PALM else (40, 220, 120)
 
     for start, end in HAND_CONNECTIONS:
@@ -153,7 +153,10 @@ def run_preview(options: PreviewOptions) -> int:
                         else:
                             gestures = (results[0].gesture, results[1].gesture)
                             landmarks_pair = (observations[0].landmarks, observations[1].landmarks)
-                            if Gesture.FIST in gestures or two_hands.mode == "switch":
+                            if any(
+                                gesture in (Gesture.FIST, Gesture.CLOSED_HAND)
+                                for gesture in gestures
+                            ) or two_hands.mode == "switch":
                                 zoom.reset()
                                 action = two_hands.update(
                                     gestures,
@@ -226,8 +229,10 @@ def run_preview(options: PreviewOptions) -> int:
                             status = "ZOOM 2 MANOS"
                         else:
                             status = "2 MANOS"
-                    elif not results or results[0].gesture in (Gesture.UNKNOWN, Gesture.FIST):
+                    elif results and results[0].gesture is Gesture.FIST:
                         status = "RECOLOCA LA MANO"
+                    elif not results or results[0].gesture in (Gesture.UNKNOWN, Gesture.CLOSED_HAND):
+                        status = "CURSOR QUIETO"
                     else:
                         status = "ACTIVO"
                     status_y = 82 + max(0, len(observations) - 1) * 44

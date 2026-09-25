@@ -177,7 +177,10 @@ class TwoHandController:
             self.reset()
             return None
 
-        fist_indexes = [index for index, gesture in enumerate(gestures) if gesture is Gesture.FIST]
+        fist_indexes = [
+            index for index, gesture in enumerate(gestures)
+            if gesture in (Gesture.FIST, Gesture.CLOSED_HAND)
+        ]
         if len(fist_indexes) == 1:
             fist_index = fist_indexes[0]
             self._fist_wrist = landmarks[fist_index][0]

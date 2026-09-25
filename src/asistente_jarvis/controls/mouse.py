@@ -14,6 +14,8 @@ class MouseSettings:
     smoothing: float = 0.35
     jitter_pixels: float = 1.5
     drag_delay_seconds: float = 0.45
+    pinch_release_grace_seconds: float = 0.1
+    minimum_click_seconds: float = 0.08
     lost_hand_seconds: float = 0.35
     snip_timeout_seconds: float = 30.0
 
@@ -34,6 +36,7 @@ class MouseController:
         self.armed = False
         self._pressed = False
         self._pinch_started: float | None = None
+        self._pinch_lost_at: float | None = None
         self._last_seen: float | None = None
         self._last_position: tuple[float, float] | None = None
         self._target_position: tuple[float, float] | None = None
@@ -83,6 +86,7 @@ class MouseController:
 
     def _clear_tracking(self) -> None:
         self._pinch_started = None
+        self._pinch_lost_at = None
         self._pinch_anchor = None
         self._pinch_screen_origin = None
         self._pointing_anchor = None
@@ -154,7 +158,16 @@ class MouseController:
         if not self.armed:
             return
 
+        if (
+            self._pinch_started is not None
+            and gesture is not Gesture.FIST
+            and pinch_ratio is not None
+            and pinch_ratio <= 0.55
+        ):
+            gesture = Gesture.PINCH
+
         if gesture is Gesture.PINCH:
+            self._pinch_lost_at = None
             if self._snip_deadline is not None and not self._snip_ready:
                 return
             if self._pinch_started is None:
@@ -181,10 +194,17 @@ class MouseController:
                 self._move_to((self._pinch_screen_origin[0] + dx, self._pinch_screen_origin[1] + dy))
             return
 
+        if self._pinch_started is not None and gesture is not Gesture.FIST:
+            if self._pinch_lost_at is None:
+                self._pinch_lost_at = now
+            if now - self._pinch_lost_at < self.settings.pinch_release_grace_seconds:
+                return
+
         if gesture is Gesture.FIST and self._pinch_started is not None:
             # Al cerrar la mano para recolocarla, una pinza transitoria no debe hacer clic.
             self._release()
             self._pinch_started = None
+            self._pinch_lost_at = None
             self._pinch_anchor = None
             self._pinch_screen_origin = None
             self._target_position = None
@@ -192,13 +212,15 @@ class MouseController:
 
         if self._pinch_started is not None:
             was_dragging = self._pressed
+            pinch_duration = now - self._pinch_started
             self._release()
             self._pinch_started = None
+            self._pinch_lost_at = None
             self._pinch_anchor = None
             self._pinch_screen_origin = None
             self._target_position = None
             self._pointing_anchor = None
-            if not was_dragging:
+            if not was_dragging and pinch_duration >= self.settings.minimum_click_seconds:
                 self._mouse.click(button="left")
 
         if gesture is Gesture.POINTING:

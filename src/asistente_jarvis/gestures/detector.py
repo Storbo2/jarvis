@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from math import hypot
 from typing import Sequence
 
 from asistente_jarvis.gestures.geometry import NormalizedPoint, distance, joint_angle
@@ -19,6 +20,7 @@ class Gesture(StrEnum):
     SELECT_ALL = "select_all"
     LETTER_C = "letter_c"
     FIST = "fist"
+    CLOSED_HAND = "closed_hand"
     UNKNOWN = "unknown"
 
 
@@ -33,7 +35,8 @@ GESTURE_LABELS = {
     Gesture.I_LOVE_YOU: "ILOVEYOU / RECORTE",
     Gesture.SELECT_ALL: "A / V INVERTIDA",
     Gesture.LETTER_C: "C (EXPERIMENTAL)",
-    Gesture.FIST: "PUNO / RECOLOCAR",
+    Gesture.FIST: "PUNO FRONTAL / RECOLOCAR",
+    Gesture.CLOSED_HAND: "MANO CERRADA",
     Gesture.UNKNOWN: "NEUTRO",
 }
 
@@ -63,11 +66,15 @@ def _finger_is_extended(points: Sequence[NormalizedPoint], joints: tuple[int, in
     return joint_angle(mcp, pip, tip) >= 155 and distance(tip, wrist) > distance(pip, wrist)
 
 
-def recognize_gesture(points: Sequence[NormalizedPoint]) -> GestureResult:
+def recognize_gesture(
+    points: Sequence[NormalizedPoint], *, aspect_ratio: float = 1.0
+) -> GestureResult:
     """Clasifica gestos simples usando proporciones independientes del tamaño de la mano."""
 
     if len(points) != 21:
         raise ValueError(f"Se esperaban 21 landmarks y se recibieron {len(points)}.")
+    if aspect_ratio <= 0:
+        raise ValueError("La proporción de la imagen debe ser positiva.")
 
     palm_scale = distance(points[0], points[9])
     if palm_scale < 1e-6:
@@ -84,15 +91,26 @@ def recognize_gesture(points: Sequence[NormalizedPoint]) -> GestureResult:
     pinch_ratio = distance(points[4], points[8]) / palm_scale
 
     folded_others = not any(extended[name] for name in ("index", "middle", "ring", "pinky"))
-    compact_fist = (
+    def camera_distance(first: NormalizedPoint, second: NormalizedPoint) -> float:
+        return hypot(first.x - second.x, (first.y - second.y) / aspect_ratio)
+
+    # El puño frontal acorta la palma proyectada y acerca los nudillos a la cámara.
+    # En MediaPipe, un valor z menor indica un punto más cercano.
+    palm_width = camera_distance(points[5], points[17])
+    palm_length = camera_distance(points[0], points[9])
+    knuckle_depth = points[0].z - (
+        points[5].z + points[9].z + points[17].z
+    ) / 3
+    front_fist = (
         folded_others
         and not extended["thumb"]
-        and distance(points[8], points[5]) / palm_scale < 0.75
-        and distance(points[12], points[9]) / palm_scale < 0.75
+        and palm_width > 1e-6
+        and palm_length / palm_width < 1.05
+        and knuckle_depth / palm_width > 0.28
     )
     if all(extended[name] for name in ("index", "middle", "ring", "pinky")):
         gesture = Gesture.OPEN_PALM
-    elif compact_fist:
+    elif front_fist:
         gesture = Gesture.FIST
     elif pinch_ratio <= 0.42:
         gesture = Gesture.PINCH
@@ -143,7 +161,7 @@ def recognize_gesture(points: Sequence[NormalizedPoint]) -> GestureResult:
     ):
         gesture = Gesture.LETTER_C
     elif folded_others and not extended["thumb"]:
-        gesture = Gesture.FIST
+        gesture = Gesture.CLOSED_HAND
     else:
         gesture = Gesture.UNKNOWN
 
