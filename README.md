@@ -9,17 +9,17 @@ La versión actual permite:
 - abrir una cámara conectada al equipo;
 - detectar hasta dos manos y dibujar sus 21 landmarks;
 - mostrar lateralidad y confianza de la detección;
-- reconocer índice, pinza y palma abierta, además de pulgar arriba, pulgar lateral, V, C e `ILoveYou`;
+- reconocer índice, pinza y palma abierta, además de pulgar arriba/abajo, pulgar lateral, V, C e `ILoveYou`;
 - mover el mouse, hacer clic y arrastrar con una mano;
 - copiar y pegar con C y V sostenidas, y seleccionar todo con una V invertida;
 - controlar el zoom con dos pinzas, una en cada mano;
 - recolocar la mano con un puño frontal, sin interferir con la pinza;
 - desplazar la página, cambiar de aplicación y deshacer o rehacer usando dos manos;
 - iniciar el recorte de pantalla con `ILoveYou` y mostrar avisos breves sobre el escritorio;
-- liberar el botón y desactivar el control con la palma abierta;
-- mostrar FPS y salir de forma segura con `Q` o `Esc`.
+- dictar con pulgar arriba, transcribir localmente con Whisper large-v3 y escribir en la ventana activa;
+- liberar el botón y desactivar el control con la palma abierta sostenida;
+- mostrar FPS y salir de forma segura con `Ctrl+Q`.
 
-El pulgar arriba se muestra en pantalla. El dictado se agregará después.
 Consulta [GESTURES.md](GESTURES.md) para la lista completa de gestos y funciones.
 
 ## Hoja de ruta
@@ -28,7 +28,7 @@ Consulta [GESTURES.md](GESTURES.md) para la lista completa de gestos y funciones
 2. ~~Reconocer gestos básicos con geometría (índice, pinza, palma abierta).~~
 3. ~~Añadir control de cursor y mouse con suavizado y un gesto de parada global.~~
 4. Afinar la calibración y la estabilidad temporal con pruebas de uso.
-5. Explorar dictado, formato de puntuación y atajos de teclado.
+5. ~~Agregar dictado local y escritura en la ventana activa.~~ Afinar puntuación y formato.
 6. ~~Añadir acciones de copiar y pegar para los gestos C y V.~~
 
 El STOP global libera cualquier botón sostenido y cancela las acciones activas.
@@ -38,10 +38,10 @@ El STOP global libera cualquier botón sostenido y cancela las acciones activas.
 - Windows 10/11 y Python 3.11 o 3.12. El archivo `.python-version` fija Python 3.12
   para mantener compatibilidad con MediaPipe.
 - [`uv`](https://docs.astral.sh/uv/) y Git.
-- Cámara y micrófono para las fases correspondientes.
+- Cámara y micrófono para el control por gestos y dictado.
 
-El control del mouse usa PyAutoGUI. El micrófono se incorporará cuando llegue la
-fase de dictado.
+El control del mouse usa PyAutoGUI y el dictado captura el micrófono con
+`sounddevice`.
 
 ## Empezar
 
@@ -58,12 +58,12 @@ uv run asistente-jarvis control
 ```
 
 El control empieza pausado. Pulsa `F8` para activarlo; `F8` vuelve a pausarlo.
-Este atajo funciona aunque estés haciendo clic en otra ventana. `Esc` cierra el
-programa; también funciona fuera de la ventana de cámara. La palma abierta
-detiene el control y suelta cualquier arrastre: pulsa `F8` para reactivarlo.
-Si se pierde la mano durante 0,35 segundos, el control también se pausa y libera
-el botón. Las esquinas de la pantalla conservan el mecanismo de seguridad de
-PyAutoGUI.
+Este atajo funciona aunque estés haciendo clic en otra ventana. `Ctrl+Q`
+cierra el programa; `Esc` queda disponible para la aplicación activa. Mantén
+la palma abierta **2 segundos** para hacer STOP, cancelar el dictado y pausar
+el control; pulsa `F8` para reactivarlo. Al sacar las manos del encuadre se
+libera cualquier arrastre y se detiene el cursor, pero el control queda activo.
+Las esquinas de la pantalla conservan el mecanismo de seguridad de PyAutoGUI.
 
 Con el control activo, señala con el índice y mueve la mano para desplazar el
 cursor desde su posición actual. La posición permanece quieta al formar una
@@ -108,7 +108,7 @@ Con un puño fijo y el índice de la otra mano puedes desplazar vertical u
 horizontalmente. Con un puño fijo y una V en la otra mano se abre `Alt+Tab`;
 inclina la mano en el plano de la cámara hacia un lado para recorrer las ventanas. Mantener
 la inclinación repite los pasos sin exigir un desplazamiento largo de la mano.
-Suelta el puño para seleccionar. STOP, `F8`, `Esc` y la pérdida de una mano
+Suelta el puño para seleccionar. STOP, `F8` y la pérdida de una mano
 sueltan `Alt`. Con un puño y el pulgar de la otra mano hacia la izquierda o la
 derecha se envía `Ctrl+Z` o `Ctrl+Y`, respectivamente.
 Si el detector confunde ese puño con una pinza, el control de dos manos usa
@@ -122,23 +122,60 @@ el recorte. Esta pinza inicia el arrastre de inmediato. Los comandos puntuales m
 pequeño sobre el escritorio durante 1,6 segundos, también cuando trabajas en
 otra ventana.
 
-## Voz preparada para la siguiente fase
+## Dictado con Whisper
 
-La dependencia `faster-whisper` y el modelo convertido `large-v3` se
-preparan con:
+Instala las dependencias y prepara el modelo local `large-v3` con:
 
 ```powershell
 uv sync
 uv run asistente-jarvis prepare-speech
 ```
 
-El modelo queda en `models/whisper/large-v3/` y no se versiona. Esta fase solo
-descarga los pesos y deja resueltas las librerías: no captura micrófono ni
-transcribe todavía. Para utilizar la GPU con la versión actual de CTranslate2,
-Windows debe poder encontrar CUDA 12 (cuBLAS) y cuDNN 9. Comprueba esa
-compatibilidad cuando implementemos el dictado; el funcionamiento anterior de
-Subtitle Edit no confirma por sí solo que estas DLL estén disponibles para
-este entorno Python.
+El modelo queda en `models/whisper/large-v3/` y no se versiona. En `control`,
+activa el sistema con `F8` y deja enfocado el campo donde quieres escribir.
+Mantén **pulgar arriba 0,6 segundos** para empezar y **pulgar abajo 0,6 segundos**
+para terminar. Mientras grabas, el audio se procesa al detectar una pausa breve
+o, como máximo, cada tres segundos y el texto aparece en el campo
+enfocado. Al terminar, se procesan los fragmentos restantes. La grabación tiene
+un límite de 60 segundos. Durante el dictado se suspenden el mouse y los otros
+gestos; STOP sostenido 2 segundos o `F8` cancelan. El primer fragmento puede tardar más al cargar el
+modelo. El audio se mantiene en memoria y no se guarda en disco.
+
+Whisper puede agregar signos por su cuenta. Jarvis descarta esos signos y
+escribe puntuación cuando dices **«coma»** (`,`), **«punto»** (`.`) o
+**«dos puntos»** (`:`). **«Enter»** hace `Shift+Enter` para insertar un salto
+de línea sin enviar el mensaje. **«Enviar»** hace `Enter` normal cuando se
+reconoce como orden aislada o después de una pausa que Whisper haya marcado
+con puntuación. Di «Enviar» separado de la frase anterior para evitar confundirlo
+con la palabra «enviar» dentro de una oración. **«Borrar palabra»** envía
+`Ctrl+Backspace`; **«Borrar todo»** envía `Ctrl+A` y `Backspace` al campo activo.
+Estas dos órdenes de borrado también deben decirse solas.
+Whisper aún puede convertir una orden hablada directamente en un signo; en ese
+caso no es posible distinguirlo de un signo inferido y no se escribe.
+
+El texto se escribe como Unicode en la misma ventana que tenía el foco al
+iniciar la grabación. Si cambias de ventana antes de terminar, se evita escribir
+en un lugar equivocado y el texto aparece en la consola. Algunas aplicaciones
+con permisos elevados pueden rechazar la escritura simulada desde un proceso
+normal. Para usar otro micrófono, ejecuta `control --microphone N` con el índice
+del dispositivo; `--speech-language en` cambia el idioma. `--speech-device auto`
+intenta CUDA y, si no puede cargarlo, usa CPU. También puedes forzar `cuda` o
+`cpu`. En este equipo el programa busca primero las DLL de CUDA 12 y cuDNN 9
+que ya están en la instalación global de PyTorch, las añade al `PATH` de este
+proceso y las carga antes de iniciar Whisper. También se puede indicar
+otra carpeta con la variable `JARVIS_CUDA_DLL_DIR`. El modo `auto` cambia a CPU
+si CUDA falla incluso durante la primera transcripción. En CPU, `large-v3`
+puede ir considerablemente más lento que el habla, por lo que el texto seguirá
+apareciendo por fragmentos, pero con retraso. Para acercarse al tiempo real con
+este modelo, Windows debe encontrar CUDA 12 (cuBLAS) y cuDNN 9 en este entorno
+Python. [faster-whisper documenta esos requisitos](https://github.com/SYSTRAN/faster-whisper#gpu).
+
+El programa prefiere el micrófono Realtek de la captura; en este equipo aparece
+como índice `1` y también es la entrada predeterminada de Python. Si cambia,
+consulta los índices con
+`uv run python -c "import sounddevice as sd; print(sd.query_devices())"` y pasa
+el índice de entrada con `--microphone N`. Windows debe permitir el acceso al
+micrófono para aplicaciones de escritorio.
 
 Al clonar el repositorio, `uv sync` creará el entorno virtual según el `uv.lock`.
 El modelo se guarda en `models/hand_landmarker.task`, una ruta excluida de Git.

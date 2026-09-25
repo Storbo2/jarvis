@@ -34,6 +34,9 @@ class PreviewOptions:
     control_mouse: bool = False
     sensitivity: float = 0.8
     select_all_mode: str = "auto"
+    microphone: int | None = None
+    speech_device: str = "auto"
+    speech_language: str = "es"
 
 
 def _open_camera(cv2: object, index: int, backend: str) -> object:
@@ -138,7 +141,11 @@ def _two_hand_gestures(
 def run_preview(options: PreviewOptions) -> int:
     import cv2
     import ctypes
+    from ctypes import wintypes
     import pyautogui
+    from asistente_jarvis.speech.dictation import DictationController
+    from asistente_jarvis.speech.typing import DictationWriter, foreground_window
+    from asistente_jarvis.config.paths import DEFAULT_WHISPER_MODEL_PATH
 
     mouse = MouseController(MouseSettings(sensitivity=options.sensitivity)) if options.control_mouse else None
     shortcuts = (
@@ -148,15 +155,36 @@ def run_preview(options: PreviewOptions) -> int:
     )
     zoom = ZoomController() if options.control_mouse else None
     two_hands = TwoHandController() if options.control_mouse else None
+    dictation = (
+        DictationController(
+            DEFAULT_WHISPER_MODEL_PATH,
+            microphone=options.microphone,
+            device=options.speech_device,
+            language=options.speech_language,
+        ) if options.control_mouse else None
+    )
     capture = _open_camera(cv2, options.camera_index, options.backend)
     overlay: CommandOverlay | None = None
-    user32 = ctypes.windll.user32 if mouse is not None else None
+    user32 = ctypes.windll.user32
+    exit_hotkey_id = 0x4A52
+    hotkey_registered = bool(user32.RegisterHotKey(None, exit_hotkey_id, 0x4002, 0x51))
+    if not hotkey_registered:
+        print("Aviso: Ctrl+Q ya está ocupado; se usará detección de teclas para salir.")
     f8_was_down = False
     started_at = monotonic()
     last_frame_at = started_at
     fps = 0.0
     shortcut_feedback: tuple[str, float] | None = None
     waiting_for_pinch_release = False
+    thumb_started: float | None = None
+    thumb_pose: Gesture | None = None
+    thumb_latched = False
+    dictation_window = 0
+    dictation_writer: DictationWriter | None = None
+    stop_started: float | None = None
+    stop_latched = False
+    ctrl_q_was_down = False
+    stop_hold_seconds = 2.0
 
     try:
         if mouse is not None:
@@ -195,48 +223,136 @@ def run_preview(options: PreviewOptions) -> int:
                     f8_is_down = bool(user32.GetAsyncKeyState(0x77) & 0x8000)
                     if f8_is_down and not f8_was_down:
                         if mouse.armed:
+                            dictation.cancel()
+                            dictation_writer = None
                             mouse.stop()
                         else:
                             mouse.arm()
                     f8_was_down = f8_is_down
-                    if user32.GetAsyncKeyState(0x1B) & 0x8000:
-                        return 0
                     action = None
-                    if len(observations) == 2:
+                    for speech_event in dictation.poll():
+                        event_action = None
+                        if speech_event.kind == "text":
+                            if speech_event.message:
+                                try:
+                                    if dictation_writer is None:
+                                        raise RuntimeError("No hay un campo de texto asociado al dictado.")
+                                    effects = dictation_writer.write(speech_event.message)
+                                    event_action = (
+                                        "Mensaje enviado" if "Enter" in effects
+                                        else "Salto de línea" if "Shift+Enter" in effects
+                                        else "Última palabra borrada" if "Borrar palabra" in effects
+                                        else "Campo borrado" if "Borrar todo" in effects
+                                        else "Dictado: texto escrito"
+                                    )
+                                except (RuntimeError, OSError) as exc:
+                                    event_action = "Dictado no escrito; ver consola"
+                                    print(f"Dictado: {speech_event.message}\nAviso: {exc}")
+                        elif speech_event.kind == "error":
+                            event_action = "Error de micrófono / Whisper"
+                            print(f"Error de dictado: {speech_event.message}")
+                        elif speech_event.kind in ("microphone", "backend"):
+                            print(speech_event.message)
+                        elif speech_event.kind == "fallback":
+                            event_action = "CUDA no disponible: usando CPU"
+                            print(speech_event.message)
+                        elif speech_event.kind == "stopped":
+                            event_action = "Tiempo máximo: terminando"
+                        elif speech_event.kind == "done":
+                            event_action = "Dictado terminado"
+                            dictation_writer = None
+                        if event_action is not None:
+                            action = event_action
+                            if overlay is not None:
+                                overlay.show(event_action)
+                    gesture = results[0].gesture if len(results) == 1 else None
+                    now = monotonic()
+                    if gesture in (Gesture.THUMBS_UP, Gesture.THUMBS_DOWN) and mouse.armed:
+                        if gesture is not thumb_pose:
+                            thumb_pose = gesture
+                            thumb_started = now
+                            thumb_latched = False
+                        if not thumb_latched:
+                            if thumb_started is not None and now - thumb_started >= 0.6:
+                                thumb_latched = True
+                                if gesture is Gesture.THUMBS_UP and dictation.state == "idle":
+                                    try:
+                                        dictation_window = foreground_window()
+                                        dictation.start()
+                                        dictation_writer = DictationWriter(dictation_window)
+                                        action = "Dictado: habla ahora"
+                                        mouse.cancel_gesture()
+                                        shortcuts.reset()
+                                        zoom.reset()
+                                        two_hands.reset()
+                                    except (FileNotFoundError, RuntimeError) as exc:
+                                        action = "Whisper no disponible"
+                                        print(f"Error de dictado: {exc}")
+                                elif gesture is Gesture.THUMBS_DOWN and dictation.state == "recording":
+                                    dictation.finish()
+                                    action = "Terminando dictado..."
+                                if action and overlay is not None:
+                                    overlay.show(action)
+                    else:
+                        thumb_pose = None
+                        thumb_started = None
+                        thumb_latched = False
+                    stop_seen = any(result.gesture is Gesture.OPEN_PALM for result in results)
+                    if stop_seen:
+                        if stop_started is None:
+                            stop_started = now
+                        elif not stop_latched and now - stop_started >= stop_hold_seconds:
+                            stop_latched = True
+                            dictation.cancel()
+                            dictation_writer = None
+                            mouse.stop()
+                            action = "STOP: control pausado"
+                            if overlay is not None:
+                                overlay.show(action)
+                    else:
+                        stop_started = None
+                        stop_latched = False
+                    if stop_seen:
+                        # Durante la confirmación no se activa ningún otro gesto.
+                        mouse.cancel_gesture()
+                        shortcuts.reset()
+                        zoom.reset()
+                        two_hands.reset()
+                    elif dictation.busy:
+                        mouse.cancel_gesture()
+                        shortcuts.reset()
+                        zoom.reset()
+                        two_hands.reset()
+                    elif len(observations) == 2:
                         waiting_for_pinch_release = True
                         mouse.cancel_gesture()
                         shortcuts.reset()
-                        if any(result.gesture is Gesture.OPEN_PALM for result in results):
-                            mouse.stop()
-                            zoom.reset()
-                            two_hands.reset()
-                        else:
-                            gestures = two_hand_gestures
-                            landmarks_pair = (observations[0].landmarks, observations[1].landmarks)
-                            if any(
-                                gesture in (Gesture.FIST, Gesture.CLOSED_HAND)
-                                for gesture in gestures
-                            ) or two_hands.mode == "switch":
-                                if two_hands.mode == "switch":
-                                    zoom.reset()
-                                else:
-                                    zoom.update(
-                                        gestures,
-                                        (landmarks_pair[0][8], landmarks_pair[1][8]),
-                                        armed=mouse.armed,
-                                    )
-                                action = two_hands.update(
-                                    gestures,
-                                    landmarks_pair,
-                                    armed=mouse.armed,
-                                )
+                        gestures = two_hand_gestures
+                        landmarks_pair = (observations[0].landmarks, observations[1].landmarks)
+                        if any(
+                            gesture in (Gesture.FIST, Gesture.CLOSED_HAND)
+                            for gesture in gestures
+                        ) or two_hands.mode == "switch":
+                            if two_hands.mode == "switch":
+                                zoom.reset()
                             else:
-                                two_hands.reset()
-                                action = zoom.update(
+                                zoom.update(
                                     gestures,
                                     (landmarks_pair[0][8], landmarks_pair[1][8]),
                                     armed=mouse.armed,
                                 )
+                            action = two_hands.update(
+                                gestures,
+                                landmarks_pair,
+                                armed=mouse.armed,
+                            )
+                        else:
+                            two_hands.reset()
+                            action = zoom.update(
+                                gestures,
+                                (landmarks_pair[0][8], landmarks_pair[1][8]),
+                                armed=mouse.armed,
+                            )
                     else:
                         zoom.reset()
                         two_hands.reset()
@@ -275,7 +391,13 @@ def run_preview(options: PreviewOptions) -> int:
                                 else action
                             )
 
-                    if mouse.dragging:
+                    if stop_seen and not stop_latched:
+                        status = f"STOP: MANTEN PALMA {max(0, stop_hold_seconds - (now - stop_started)):.1f} S"
+                    elif dictation.state == "recording":
+                        status = "DICTANDO: PULGAR ABAJO PARA TERMINAR"
+                    elif dictation.state == "finishing":
+                        status = "PROCESANDO ULTIMOS FRAGMENTOS"
+                    elif mouse.dragging:
                         status = "RECORTANDO" if mouse.snip_mode else "ARRASTRANDO"
                     elif not mouse.armed:
                         status = "PAUSADO"
@@ -305,7 +427,7 @@ def run_preview(options: PreviewOptions) -> int:
                     status_y = 82 + max(0, len(observations) - 1) * 44
                     cv2.putText(
                         frame,
-                        f"{status} | F8 pausa | ESC salir",
+                        f"{status} | F8 pausa | Ctrl+Q salir",
                         (16, status_y),
                         cv2.FONT_HERSHEY_SIMPLEX,
                         0.55,
@@ -333,7 +455,7 @@ def run_preview(options: PreviewOptions) -> int:
                 last_frame_at = now
                 cv2.putText(
                     frame,
-                    f"{fps:.0f} FPS | Q o ESC para salir",
+                    f"{fps:.0f} FPS | Ctrl+Q para salir",
                     (16, frame.shape[0] - 18),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.55,
@@ -342,19 +464,36 @@ def run_preview(options: PreviewOptions) -> int:
                     cv2.LINE_AA,
                 )
                 cv2.imshow("Asistente Jarvis - Reconocimiento preliminar", frame)
-                if cv2.waitKey(1) & 0xFF in (ord("q"), 27):
+                hotkey_message = wintypes.MSG()
+                if hotkey_registered:
+                    while user32.PeekMessageW(
+                        ctypes.byref(hotkey_message), wintypes.HWND(-1), 0x0312, 0x0312, 1
+                    ):
+                        if hotkey_message.wParam == exit_hotkey_id:
+                            return 0
+                ctrl_q_is_down = bool(
+                    user32.GetAsyncKeyState(0x11) & 0x8000
+                    and user32.GetAsyncKeyState(0x51) & 0x8000
+                )
+                if ctrl_q_is_down and not ctrl_q_was_down:
                     return 0
+                ctrl_q_was_down = ctrl_q_is_down
+                cv2.waitKey(1)
     except pyautogui.FailSafeException as exc:
         raise RuntimeError(
             "Control detenido por el mecanismo de seguridad de PyAutoGUI "
             "al llegar a una esquina de la pantalla."
         ) from exc
     finally:
+        if hotkey_registered:
+            user32.UnregisterHotKey(None, exit_hotkey_id)
         if overlay is not None:
             overlay.close()
         if two_hands is not None:
             two_hands.reset()
         if mouse is not None:
             mouse.close()
+        if dictation is not None:
+            dictation.close()
         capture.release()
         cv2.destroyAllWindows()

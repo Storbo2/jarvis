@@ -38,6 +38,7 @@ dependencies = [
     { name = "mediapipe" },
     { name = "opencv-contrib-python" },
     { name = "pyautogui" },
+    { name = "sounddevice" },
 ]
 
 [package.metadata]
@@ -47,6 +48,7 @@ requires-dist = [
     { name = "mediapipe", specifier = ">=0.10.21,<2" },
     { name = "opencv-contrib-python", specifier = ">=4.10,<5" },
     { name = "pyautogui", specifier = ">=0.9.54,<1" },
+    { name = "sounddevice", specifier = ">=0.5,<1" },
 ]
 
 [[package]]

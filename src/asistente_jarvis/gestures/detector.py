@@ -13,6 +13,7 @@ class Gesture(StrEnum):
     PINCH = "pinch"
     POINTING = "pointing"
     THUMBS_UP = "thumbs_up"
+    THUMBS_DOWN = "thumbs_down"
     THUMBS_LEFT = "thumbs_left"
     THUMBS_RIGHT = "thumbs_right"
     VICTORY = "victory"
@@ -29,6 +30,7 @@ GESTURE_LABELS = {
     Gesture.PINCH: "PINZA",
     Gesture.POINTING: "INDICE",
     Gesture.THUMBS_UP: "PULGAR ARRIBA",
+    Gesture.THUMBS_DOWN: "PULGAR ABAJO",
     Gesture.THUMBS_LEFT: "PULGAR IZQUIERDA",
     Gesture.THUMBS_RIGHT: "PULGAR DERECHA",
     Gesture.VICTORY: "V / DOS DEDOS",
@@ -116,6 +118,16 @@ def recognize_gesture(
         gesture = Gesture.PINCH
     elif (
         extended["thumb"]
+        and not any(extended[name] for name in ("middle", "ring", "pinky"))
+        and 0.58 <= pinch_ratio <= 1.65
+        and 82 <= joint_angle(points[5], points[6], points[8]) < 155
+        and distance(points[8], points[5]) / palm_scale >= 0.62
+    ):
+        # La C deja el índice curvado, pero separado de la palma. Evaluarla
+        # antes del pulgar lateral evita que este último se quede con la pose.
+        gesture = Gesture.LETTER_C
+    elif (
+        extended["thumb"]
         and folded_others
         and abs(points[4].x - points[2].x) / palm_scale >= 0.3
         and abs(points[4].x - points[2].x) > abs(points[4].y - points[2].y)
@@ -127,6 +139,12 @@ def recognize_gesture(
         and points[4].y < points[2].y - palm_scale * 0.35
     ):
         gesture = Gesture.THUMBS_UP
+    elif (
+        extended["thumb"]
+        and folded_others
+        and points[4].y > points[2].y + palm_scale * 0.35
+    ):
+        gesture = Gesture.THUMBS_DOWN
     elif (
         extended["thumb"]
         and extended["index"]
@@ -151,15 +169,6 @@ def recognize_gesture(
         extended[name] for name in ("middle", "ring", "pinky")
     ):
         gesture = Gesture.POINTING
-    elif (
-        extended["thumb"]
-        and not extended["middle"]
-        and not extended["ring"]
-        and not extended["pinky"]
-        and 0.65 <= pinch_ratio <= 1.5
-        and 90 <= joint_angle(points[5], points[6], points[8]) < 155
-    ):
-        gesture = Gesture.LETTER_C
     elif folded_others and not extended["thumb"]:
         gesture = Gesture.CLOSED_HAND
     else:

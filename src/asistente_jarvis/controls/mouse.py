@@ -16,7 +16,6 @@ class MouseSettings:
     drag_delay_seconds: float = 0.45
     pinch_release_grace_seconds: float = 0.1
     minimum_click_seconds: float = 0.08
-    lost_hand_seconds: float = 0.35
     snip_timeout_seconds: float = 30.0
 
 
@@ -37,7 +36,6 @@ class MouseController:
         self._pressed = False
         self._pinch_started: float | None = None
         self._pinch_lost_at: float | None = None
-        self._last_seen: float | None = None
         self._last_position: tuple[float, float] | None = None
         self._target_position: tuple[float, float] | None = None
         self._pointing_anchor: NormalizedPoint | None = None
@@ -67,12 +65,10 @@ class MouseController:
         self._snip_deadline = None
         self._snip_ready = False
         self._snip_dragging = False
-        self._last_seen = monotonic()
 
     def stop(self) -> None:
         self.armed = False
         self._clear_tracking()
-        self._last_seen = None
         self._snip_deadline = None
         self._snip_ready = False
         self._release()
@@ -153,18 +149,15 @@ class MouseController:
             self._snip_ready = False
 
         if gesture is Gesture.OPEN_PALM:
-            self.stop()
+            self.cancel_gesture()
             return
 
         if landmarks is None:
-            # Una sola imagen perdida cancela la pinza y libera un arrastre.
+            # La mano ausente suelta un arrastre, pero conserva el control activo.
             self._clear_tracking()
             self._release()
-            if self._last_seen is not None and now - self._last_seen >= self.settings.lost_hand_seconds:
-                self.stop()
             return
 
-        self._last_seen = now
         if not self.armed:
             return
 

@@ -1,7 +1,7 @@
 # Gestos y funciones
 
 Esta lista describe los gestos disponibles en `uv run asistente-jarvis control`.
-El control comienza pausado; `F8` lo activa o pausa. `Esc` cierra el programa.
+El control comienza pausado; `F8` lo activa o pausa. `Ctrl+Q` cierra el programa.
 `uv run asistente-jarvis preview` muestra los gestos sin enviar entradas al sistema.
 
 ## Una mano
@@ -13,11 +13,12 @@ El control comienza pausado; `F8` lo activa o pausa. `Esc` cierra el programa.
 | Mano cerrada normal | Deja el cursor quieto; sirve como modificador de dos manos | Disponible |
 | Pinza breve | Clic izquierdo al soltar, sin desplazar el cursor | Disponible |
 | Pinza sostenida al menos 0,45 s | Arrastrar; soltar la pinza termina el arrastre | Disponible |
-| Cuatro dedos largos extendidos, juntos o separados | STOP: libera el mouse y pausa el control | Disponible |
+| Cuatro dedos largos extendidos, juntos o separados durante 2 s | STOP: libera el mouse, cancela el dictado y pausa el control | Disponible |
 | C sostenida al menos 0,45 s | Copiar (`Ctrl+C`) | Disponible |
 | V hacia arriba sostenida al menos 0,45 s | Pegar (`Ctrl+V`) | Disponible |
 | V invertida, dedos hacia abajo, sostenida al menos 0,45 s | Seleccionar todo | Disponible |
-| Pulgar arriba | Reservado para dictado | Solo detección |
+| Pulgar arriba sostenido 0,6 s | Iniciar dictado progresivo con Whisper large-v3 | Disponible |
+| Pulgar abajo sostenido 0,6 s | Terminar dictado y procesar el audio pendiente | Disponible |
 | Pulgar, índice y meñique extendidos (`ILoveYou`) durante 0,45 s | Abrir recorte de pantalla (`Win+Shift+S`) | Disponible |
 
 El gesto de seleccionar todo usa `Ctrl+E` en el Explorador de archivos y en
@@ -45,7 +46,7 @@ arrastre; abrir la pinza lo termina.
 | En el selector, inclinar la muñeca con la V hacia la derecha/izquierda | Ventana siguiente/anterior; sostener la inclinación repite pasos | Disponible |
 | Un puño + pulgar lateral de la otra mano hacia la izquierda durante 0,45 s | Deshacer (`Ctrl+Z`) | Disponible |
 | Un puño + pulgar lateral de la otra mano hacia la derecha durante 0,45 s | Rehacer (`Ctrl+Y`) | Disponible |
-| STOP con cualquiera de las dos manos | Pausar todo y liberar el mouse | Disponible |
+| STOP durante 2 s con cualquiera de las dos manos | Pausar todo y liberar el mouse | Disponible |
 
 Al aparecer dos manos, se cancelan el clic o arrastre pendiente y los atajos de
 una mano. Mantén ambas pinzas unos 0,35 s para establecer la distancia inicial;
@@ -89,6 +90,16 @@ Los atajos puntuales como copiar, pegar, deshacer, rehacer, seleccionar todo y
 recortar pantalla muestran un aviso pequeño sobre el escritorio durante 1,6 s.
 El aviso no cambia el foco de la aplicación ni bloquea clics.
 
+Durante el dictado, STOP sostenido 2 s o `F8` cancelan la grabación. Deja enfocado el campo
+de texto mientras aparecen los fragmentos transcritos. El audio se conserva
+solo en memoria y la grabación se detiene automáticamente al cumplir 60 segundos.
+Di «coma», «punto» o «dos puntos» para escribir `,`, `.` o `:`; los signos que
+Whisper añada sin una orden se descartan. «Enter» inserta un salto de línea con
+`Shift+Enter`. «Enviar» ejecuta `Enter` normal como orden aislada; espera a que
+se escriba el fragmento anterior antes de decirlo. «Borrar palabra» quita la
+última palabra con `Ctrl+Backspace` y «Borrar todo» limpia el campo con
+`Ctrl+A` y `Backspace`; di esas órdenes solas.
+
 Para recortar, forma `ILoveYou` hasta que aparezca la interfaz de Recortes.
 Señala con el índice para colocar el cursor en una esquina de la zona deseada.
 Forma una pinza y, sin soltarla, mueve la mano hasta la esquina opuesta; al
@@ -124,8 +135,6 @@ geométricos personalizados.
 
 | Gesto propuesto | Posible función | Consideración |
 |---|---|---|
-| Pulgar arriba sostenido | Iniciar dictado | Requiere grabación, transcripción y una señal de fin clara |
-| `Thumb_Down` sostenido | Deshacer (`Ctrl+Z`) | Requiere agregar o entrenar un detector sin chocar con pulgar arriba |
 | Dos manos girando en sentidos opuestos | Rotar lienzo o imagen | Depende de atajos de cada aplicación |
 
 Estas ideas todavía no envían comandos. Antes de agregarlas conviene comprobar

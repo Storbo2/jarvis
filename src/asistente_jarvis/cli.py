@@ -16,7 +16,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     for command, description in (
         ("preview", "Muestra landmarks y gestos reconocidos."),
-        ("control", "Controla mouse, copiar y pegar con gestos."),
+        ("control", "Controla mouse, atajos y dictado con gestos."),
     ):
         vision = subparsers.add_parser(command, help=description)
         vision.add_argument("--camera", type=int, default=0, help="Índice de cámara (por defecto: 0).")
@@ -50,6 +50,18 @@ def build_parser() -> argparse.ArgumentParser:
                 default="auto",
                 help="Atajo para seleccionar todo (por defecto: auto según la aplicación).",
             )
+            vision.add_argument(
+                "--microphone", type=int, default=None,
+                help="Índice del micrófono; por defecto usa el dispositivo de entrada de Windows.",
+            )
+            vision.add_argument(
+                "--speech-device", choices=("auto", "cuda", "cpu"), default="auto",
+                help="Procesador de Whisper (auto intenta CUDA y luego CPU).",
+            )
+            vision.add_argument(
+                "--speech-language", default="es",
+                help="Idioma del dictado en código ISO; por defecto: es.",
+            )
 
     download = subparsers.add_parser(
         "download-model", help="Descarga el modelo oficial de Hand Landmarker."
@@ -62,7 +74,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     download.add_argument("--force", action="store_true", help="Reemplaza un modelo existente.")
     speech = subparsers.add_parser(
-        "prepare-speech", help="Descarga Whisper large-v3 para la futura fase de dictado."
+        "prepare-speech", help="Descarga Whisper large-v3 para el dictado local."
     )
     speech.add_argument(
         "--output",
@@ -107,6 +119,9 @@ def main(argv: list[str] | None = None) -> int:
                 control_mouse=args.command == "control",
                 sensitivity=getattr(args, "sensitivity", 0.8),
                 select_all_mode=getattr(args, "select_all_mode", "auto"),
+                microphone=getattr(args, "microphone", None),
+                speech_device=getattr(args, "speech_device", "auto"),
+                speech_language=getattr(args, "speech_language", "es"),
             )
             return run_preview(options)
     except (FileNotFoundError, RuntimeError, ValueError) as exc:
