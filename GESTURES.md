@@ -2,6 +2,8 @@
 
 Esta lista describe los gestos disponibles en `uv run asistente-jarvis control`.
 El control comienza pausado; `F8` lo activa o pausa. `Ctrl+Q` cierra el programa.
+`F9` abre la calibración del cursor y guarda los ajustes al cerrarla; `F10`
+alterna el diagnóstico visual de puntos bruto/filtrado y posición del cursor.
 `uv run asistente-jarvis preview` muestra los gestos sin enviar entradas al sistema.
 
 ## Una mano

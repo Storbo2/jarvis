@@ -71,11 +71,26 @@ pinza: si sueltas antes de 0,45 segundos, hace clic exactamente allí. Si mantie
 la pinza, comienza el arrastre desde esa posición; mueve la mano y suelta la
 pinza para terminar. Al volver a señalar, el cursor retoma el movimiento desde
 donde quedó, sin saltar a otra posición.
-El movimiento combina la punta y la articulación del índice para reducir el
-temblor de la detección sin perder la dirección de la mano.
+El movimiento combina la punta y dos articulaciones del índice. Una mediana de
+tres imágenes descarta saltos aislados; el suavizado se adapta a la velocidad:
+estabiliza el cursor en reposo y responde más rápido a movimientos amplios.
+Este filtro se reinicia al dejar de señalar, para que volver al índice no
+desplace el cursor de golpe. El arrastre por pinza conserva su propio movimiento.
 
-La sensibilidad predeterminada es `0.8`. Si necesitas movimientos más finos,
-prueba `uv run asistente-jarvis control --sensitivity 0.6`. Un valor mayor mueve
+Pulsa `F9` en `control` para abrir el panel de calibración. Ajusta **sensibilidad**
+(distancia recorrida), **estabilidad** (suavidad del índice) y **zona muerta**
+(movimientos mínimos que se ignoran). Mientras el panel está abierto, los
+gestos no ejecutan acciones. `F9` o cerrar el panel guarda los valores en
+`data/cursor_calibration.json`, excluido de Git. Cierra el panel para probar el
+cursor y vuelve a abrirlo si quieres retocar. `F10` muestra u oculta en la
+cámara un diagnóstico con el punto bruto (amarillo), filtrado (cian), destino
+y posición real del cursor; también aparece mientras calibras. El diagnóstico
+usa coordenadas de la cámara para los puntos y píxeles de pantalla para el
+destino y la posición real.
+
+La sensibilidad inicial es `0.8`. Si necesitas movimientos más finos,
+prueba `uv run asistente-jarvis control --sensitivity 0.6`. Ese argumento
+reemplaza la sensibilidad guardada durante esa ejecución. Un valor mayor mueve
 el cursor más lejos por el mismo desplazamiento de mano (rango admitido: `0.1` a
 `4.0`). En un monitor grande empieza por `--sensitivity 1.5` y ajusta desde ahí.
 Un valor muy alto también amplifica los pequeños temblores.

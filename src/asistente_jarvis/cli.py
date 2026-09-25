@@ -41,8 +41,8 @@ def build_parser() -> argparse.ArgumentParser:
             vision.add_argument(
                 "--sensitivity",
                 type=float,
-                default=0.8,
-                help="Velocidad relativa del cursor (0.1 a 4.0; por defecto: 0.8).",
+                default=None,
+                help="Velocidad relativa del cursor (0.1 a 4.0; reemplaza la calibración guardada en esta sesión).",
             )
             vision.add_argument(
                 "--select-all-mode",
@@ -117,7 +117,7 @@ def main(argv: list[str] | None = None) -> int:
                 mirror=not args.no_mirror,
                 model_path=args.model,
                 control_mouse=args.command == "control",
-                sensitivity=getattr(args, "sensitivity", 0.8),
+                sensitivity=getattr(args, "sensitivity", None),
                 select_all_mode=getattr(args, "select_all_mode", "auto"),
                 microphone=getattr(args, "microphone", None),
                 speech_device=getattr(args, "speech_device", "auto"),

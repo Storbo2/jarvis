@@ -4,6 +4,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from time import monotonic
 
+from asistente_jarvis.config.cursor import (
+    CursorCalibration, load_cursor_calibration, save_cursor_calibration,
+)
 from asistente_jarvis.controls.mouse import MouseController, MouseSettings
 from asistente_jarvis.controls.overlay import CommandOverlay
 from asistente_jarvis.controls.shortcuts import ShortcutController, ShortcutSettings
@@ -14,6 +17,7 @@ from asistente_jarvis.gestures.detector import (
 )
 from asistente_jarvis.gestures.geometry import NormalizedPoint, distance
 from asistente_jarvis.vision.hand_tracker import HandObservation, HandTracker
+from asistente_jarvis.vision.calibration import CalibrationPanel
 
 
 HAND_CONNECTIONS = (
@@ -32,7 +36,7 @@ class PreviewOptions:
     mirror: bool
     model_path: Path
     control_mouse: bool = False
-    sensitivity: float = 0.8
+    sensitivity: float | None = None
     select_all_mode: str = "auto"
     microphone: int | None = None
     speech_device: str = "auto"
@@ -138,6 +142,35 @@ def _two_hand_gestures(
     return gestures[0], gestures[1]
 
 
+def _draw_cursor_diagnostics(
+    cv2: object, frame: object, mouse: MouseController, calibration: CursorCalibration
+) -> None:
+    height, width = frame.shape[:2]
+    raw, filtered, target = mouse.cursor_diagnostics
+    if raw is not None:
+        cv2.circle(frame, _pixel(raw, width, height), 10, (0, 220, 255), 2, cv2.LINE_AA)
+    if filtered is not None:
+        cv2.circle(frame, _pixel(filtered, width, height), 5, (255, 255, 0), -1, cv2.LINE_AA)
+    if raw is not None and filtered is not None:
+        cv2.line(frame, _pixel(raw, width, height), _pixel(filtered, width, height),
+                 (255, 255, 0), 1, cv2.LINE_AA)
+    actual = mouse._current_position()
+    lines = (
+        f"CURSOR | sensibilidad {calibration.sensitivity:.2f}  "
+        f"estabilidad {calibration.stability:.2f}  zona {calibration.deadzone_pixels:.1f}px",
+        f"Bruto: {raw.x:.3f}, {raw.y:.3f}" if raw else "Bruto: --",
+        f"Filtrado: {filtered.x:.3f}, {filtered.y:.3f}" if filtered else "Filtrado: --",
+        f"Destino: {target[0]:.0f}, {target[1]:.0f} px | Real: "
+        f"{actual[0]:.0f}, {actual[1]:.0f} px" if target else
+        f"Destino: -- | Real: {actual[0]:.0f}, {actual[1]:.0f} px",
+    )
+    top = max(100, height - 151)
+    cv2.rectangle(frame, (8, top), (min(width - 8, 565), top + 116), (20, 20, 20), -1)
+    for index, line in enumerate(lines):
+        cv2.putText(frame, line, (16, top + 23 + index * 28),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (230, 235, 235), 1, cv2.LINE_AA)
+
+
 def run_preview(options: PreviewOptions) -> int:
     import cv2
     import ctypes
@@ -147,7 +180,20 @@ def run_preview(options: PreviewOptions) -> int:
     from asistente_jarvis.speech.typing import DictationWriter, foreground_window
     from asistente_jarvis.config.paths import DEFAULT_WHISPER_MODEL_PATH
 
-    mouse = MouseController(MouseSettings(sensitivity=options.sensitivity)) if options.control_mouse else None
+    calibration = load_cursor_calibration()
+    if options.sensitivity is not None:
+        calibration = CursorCalibration(
+            sensitivity=options.sensitivity,
+            stability=calibration.stability,
+            deadzone_pixels=calibration.deadzone_pixels,
+        )
+    mouse = (
+        MouseController(MouseSettings(
+            sensitivity=calibration.sensitivity,
+            stability=calibration.stability,
+            jitter_pixels=calibration.deadzone_pixels,
+        )) if options.control_mouse else None
+    )
     shortcuts = (
         ShortcutController(ShortcutSettings(select_all_mode=options.select_all_mode))
         if options.control_mouse
@@ -171,6 +217,10 @@ def run_preview(options: PreviewOptions) -> int:
     if not hotkey_registered:
         print("Aviso: Ctrl+Q ya está ocupado; se usará detección de teclas para salir.")
     f8_was_down = False
+    f9_was_down = False
+    f10_was_down = False
+    calibration_panel: CalibrationPanel | None = None
+    diagnostic_visible = False
     started_at = monotonic()
     last_frame_at = started_at
     fps = 0.0
@@ -220,6 +270,42 @@ def run_preview(options: PreviewOptions) -> int:
                     )
 
                 if mouse is not None:
+                    f9_is_down = bool(user32.GetAsyncKeyState(0x78) & 0x8000)
+                    if f9_is_down and not f9_was_down:
+                        if calibration_panel is None:
+                            if dictation.busy:
+                                if overlay is not None:
+                                    overlay.show("Termina el dictado antes de calibrar")
+                            else:
+                                mouse.cancel_gesture()
+                                shortcuts.reset()
+                                zoom.reset()
+                                two_hands.reset()
+                                calibration_panel = CalibrationPanel(cv2, calibration)
+                        else:
+                            calibration = calibration_panel.values()
+                            save_cursor_calibration(calibration)
+                            calibration_panel.close()
+                            calibration_panel = None
+                            mouse.cancel_gesture()
+                            if overlay is not None:
+                                overlay.show("Calibracion guardada")
+                    f9_was_down = f9_is_down
+                    f10_is_down = bool(user32.GetAsyncKeyState(0x79) & 0x8000)
+                    if f10_is_down and not f10_was_down:
+                        diagnostic_visible = not diagnostic_visible
+                    f10_was_down = f10_is_down
+                    if calibration_panel is not None:
+                        if calibration_panel.is_open():
+                            updated = calibration_panel.values()
+                            if updated != calibration:
+                                calibration = updated
+                                mouse.configure_cursor(calibration)
+                            calibration_panel.show(calibration)
+                        else:
+                            save_cursor_calibration(calibration)
+                            calibration_panel = None
+                            mouse.cancel_gesture()
                     f8_is_down = bool(user32.GetAsyncKeyState(0x77) & 0x8000)
                     if f8_is_down and not f8_was_down:
                         if mouse.armed:
@@ -267,7 +353,8 @@ def run_preview(options: PreviewOptions) -> int:
                                 overlay.show(event_action)
                     gesture = results[0].gesture if len(results) == 1 else None
                     now = monotonic()
-                    if gesture in (Gesture.THUMBS_UP, Gesture.THUMBS_DOWN) and mouse.armed:
+                    if (gesture in (Gesture.THUMBS_UP, Gesture.THUMBS_DOWN)
+                            and mouse.armed and calibration_panel is None):
                         if gesture is not thumb_pose:
                             thumb_pose = gesture
                             thumb_started = now
@@ -297,7 +384,10 @@ def run_preview(options: PreviewOptions) -> int:
                         thumb_pose = None
                         thumb_started = None
                         thumb_latched = False
-                    stop_seen = any(result.gesture is Gesture.OPEN_PALM for result in results)
+                    stop_seen = (
+                        calibration_panel is None
+                        and any(result.gesture is Gesture.OPEN_PALM for result in results)
+                    )
                     if stop_seen:
                         if stop_started is None:
                             stop_started = now
@@ -312,7 +402,16 @@ def run_preview(options: PreviewOptions) -> int:
                     else:
                         stop_started = None
                         stop_latched = False
-                    if stop_seen:
+                    if calibration_panel is not None:
+                        shortcuts.reset()
+                        zoom.reset()
+                        two_hands.reset()
+                        mouse.observe_cursor(
+                            results[0].gesture if len(results) == 1 else None,
+                            observations[0].landmarks if len(observations) == 1 else None,
+                            now=now,
+                        )
+                    elif stop_seen:
                         # Durante la confirmación no se activa ningún otro gesto.
                         mouse.cancel_gesture()
                         shortcuts.reset()
@@ -391,7 +490,9 @@ def run_preview(options: PreviewOptions) -> int:
                                 else action
                             )
 
-                    if stop_seen and not stop_latched:
+                    if calibration_panel is not None:
+                        status = "CALIBRACION: AJUSTA CONTROLES; F9 GUARDA"
+                    elif stop_seen and not stop_latched:
                         status = f"STOP: MANTEN PALMA {max(0, stop_hold_seconds - (now - stop_started)):.1f} S"
                     elif dictation.state == "recording":
                         status = "DICTANDO: PULGAR ABAJO PARA TERMINAR"
@@ -446,6 +547,8 @@ def run_preview(options: PreviewOptions) -> int:
                             2,
                             cv2.LINE_AA,
                         )
+                    if diagnostic_visible or calibration_panel is not None:
+                        _draw_cursor_diagnostics(cv2, frame, mouse, calibration)
 
                 now = monotonic()
                 if overlay is not None:
@@ -485,6 +588,9 @@ def run_preview(options: PreviewOptions) -> int:
             "al llegar a una esquina de la pantalla."
         ) from exc
     finally:
+        if calibration_panel is not None:
+            save_cursor_calibration(calibration)
+            calibration_panel.close()
         if hotkey_registered:
             user32.UnregisterHotKey(None, exit_hotkey_id)
         if overlay is not None:

@@ -1,16 +1,20 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from math import hypot
+from collections import deque
+from dataclasses import dataclass, replace
+from math import exp, hypot
+from statistics import median
 from time import monotonic
 
 from asistente_jarvis.gestures.detector import Gesture
 from asistente_jarvis.gestures.geometry import NormalizedPoint
+from asistente_jarvis.config.cursor import CursorCalibration
 
 
 @dataclass(frozen=True, slots=True)
 class MouseSettings:
     sensitivity: float = 0.8
+    stability: float = 0.5
     smoothing: float = 0.42
     jitter_pixels: float = 1.5
     drag_delay_seconds: float = 0.45
@@ -39,6 +43,10 @@ class MouseController:
         self._last_position: tuple[float, float] | None = None
         self._target_position: tuple[float, float] | None = None
         self._pointing_anchor: NormalizedPoint | None = None
+        self._point_samples: deque[NormalizedPoint] = deque(maxlen=3)
+        self._filtered_point: NormalizedPoint | None = None
+        self._raw_point: NormalizedPoint | None = None
+        self._filtered_at: float | None = None
         self._pinch_anchor: NormalizedPoint | None = None
         self._pinch_screen_origin: tuple[float, float] | None = None
         self._snip_deadline: float | None = None
@@ -52,6 +60,21 @@ class MouseController:
     @property
     def snip_mode(self) -> bool:
         return self._snip_deadline is not None or self._snip_dragging
+
+    @property
+    def cursor_diagnostics(self) -> tuple[
+        NormalizedPoint | None, NormalizedPoint | None, tuple[float, float] | None
+    ]:
+        return self._raw_point, self._filtered_point, self._target_position
+
+    def configure_cursor(self, calibration: CursorCalibration) -> None:
+        self.settings = replace(
+            self.settings,
+            sensitivity=calibration.sensitivity,
+            stability=calibration.stability,
+            jitter_pixels=calibration.deadzone_pixels,
+        )
+        self._clear_tracking()
 
     def begin_snip(self) -> None:
         """La primera pinza tras abrir Recortes inicia un arrastre inmediato."""
@@ -86,6 +109,10 @@ class MouseController:
         self._pinch_anchor = None
         self._pinch_screen_origin = None
         self._pointing_anchor = None
+        self._point_samples.clear()
+        self._filtered_point = None
+        self._raw_point = None
+        self._filtered_at = None
         self._target_position = None
         self._last_position = None
 
@@ -114,22 +141,71 @@ class MouseController:
 
     @staticmethod
     def _pointing_position(landmarks: tuple[NormalizedPoint, ...]) -> NormalizedPoint:
-        # La punta es expresiva pero tiembla; la articulación aporta estabilidad.
+        # La punta sigue el movimiento; las articulaciones reducen el temblor.
         tip = landmarks[8]
         joint = landmarks[6]
+        base = landmarks[5]
         return NormalizedPoint(
-            tip.x * 0.65 + joint.x * 0.35,
-            tip.y * 0.65 + joint.y * 0.35,
+            tip.x * 0.55 + joint.x * 0.30 + base.x * 0.15,
+            tip.y * 0.55 + joint.y * 0.30 + base.y * 0.15,
         )
 
-    def _move_to(self, target: tuple[float, float]) -> None:
+    def _filter_point(self, raw: NormalizedPoint, now: float) -> NormalizedPoint:
+        self._raw_point = raw
+        self._point_samples.append(raw)
+        candidate = NormalizedPoint(
+            median(point.x for point in self._point_samples),
+            median(point.y for point in self._point_samples),
+        )
+        previous = self._filtered_point
+        if previous is None or self._filtered_at is None:
+            self._filtered_point = candidate
+            self._filtered_at = now
+            return candidate
+        dt = min(0.1, max(1 / 120, now - self._filtered_at))
+        movement = hypot(
+            (candidate.x - previous.x) * (self.width - 1),
+            (candidate.y - previous.y) * (self.height - 1),
+        )
+        # Más suavidad en reposo; menor latencia al mover la mano con decisión.
+        decay = 18 - 12 * self.settings.stability
+        alpha = min(0.85, 1 - exp(-decay * dt) + min(0.45, movement / dt / 2000))
+        filtered = NormalizedPoint(
+            previous.x + alpha * (candidate.x - previous.x),
+            previous.y + alpha * (candidate.y - previous.y),
+        )
+        self._filtered_point = filtered
+        self._filtered_at = now
+        return filtered
+
+    def _reset_point_filter(self) -> None:
+        self._point_samples.clear()
+        self._filtered_point = None
+        self._raw_point = None
+        self._filtered_at = None
+        self._pointing_anchor = None
+
+    def observe_cursor(
+        self, gesture: Gesture | None, landmarks: tuple[NormalizedPoint, ...] | None,
+        *, now: float | None = None,
+    ) -> None:
+        """Muestra el filtro en calibración sin enviar movimientos al escritorio."""
+        if gesture is Gesture.POINTING and landmarks is not None:
+            self._filter_point(self._pointing_position(landmarks), monotonic() if now is None else now)
+        else:
+            self._reset_point_filter()
+
+    def _move_to(self, target: tuple[float, float], *, pointing: bool = False) -> None:
         old_x, old_y = self._last_position or self._current_position()
         target_x = max(0.0, min(self.width - 1, target[0]))
         target_y = max(0.0, min(self.height - 1, target[1]))
         remaining = hypot(target_x - old_x, target_y - old_y)
         if remaining < self.settings.jitter_pixels:
             return
-        alpha = min(0.8, self.settings.smoothing + remaining / 400)
+        alpha = (
+            min(0.92, 0.65 + remaining / 500)
+            if pointing else min(0.8, self.settings.smoothing + remaining / 400)
+        )
         x = old_x + alpha * (target_x - old_x)
         y = old_y + alpha * (target_y - old_y)
         self._mouse.moveTo(round(x), round(y), duration=0)
@@ -179,7 +255,7 @@ class MouseController:
                 self._pinch_screen_origin = self._current_position()
                 self._last_position = self._pinch_screen_origin
                 self._target_position = self._pinch_screen_origin
-                self._pointing_anchor = None
+                self._reset_point_filter()
                 if self._snip_deadline is not None:
                     self._mouse.mouseDown(button="left")
                     self._pressed = True
@@ -211,7 +287,7 @@ class MouseController:
             self._pinch_anchor = None
             self._pinch_screen_origin = None
             self._target_position = None
-            self._pointing_anchor = None
+            self._reset_point_filter()
 
         if self._pinch_started is not None:
             was_dragging = self._pressed
@@ -222,19 +298,19 @@ class MouseController:
             self._pinch_anchor = None
             self._pinch_screen_origin = None
             self._target_position = None
-            self._pointing_anchor = None
+            self._reset_point_filter()
             if not was_dragging and pinch_duration >= self.settings.minimum_click_seconds:
                 self._mouse.click(button="left")
 
         if gesture is Gesture.POINTING:
             # Congela el cursor antes de que la pinza alcance el umbral del detector.
             if pinch_ratio is not None and pinch_ratio <= 0.7:
-                self._pointing_anchor = None
+                self._reset_point_filter()
                 self._target_position = None
                 return
             if self._snip_deadline is not None:
                 self._snip_ready = True
-            tip = self._pointing_position(landmarks)
+            tip = self._filter_point(self._pointing_position(landmarks), now)
             if self._pointing_anchor is None:
                 self._pointing_anchor = tip
                 self._target_position = self._current_position()
@@ -247,9 +323,9 @@ class MouseController:
                     max(0.0, min(self.height - 1, target_y + dy)),
                 )
                 self._pointing_anchor = tip
-                self._move_to(self._target_position)
+                self._move_to(self._target_position, pointing=True)
         else:
-            self._pointing_anchor = None
+            self._reset_point_filter()
             self._target_position = None
 
     def close(self) -> None:
