@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from time import monotonic
 
+from asistente_jarvis.application.intents import Intent, IntentKind
 from asistente_jarvis.gestures.detector import Gesture
 from asistente_jarvis.gestures.geometry import NormalizedPoint, distance
 
@@ -19,9 +20,6 @@ class ZoomController:
     """Zoom por distancia entre dos pinzas, sin compartir estado con el mouse."""
 
     def __init__(self, settings: ZoomSettings | None = None) -> None:
-        import pyautogui
-
-        self._keyboard = pyautogui
         self.settings = settings or ZoomSettings()
         self._candidate_since: float | None = None
         self._missing_since: float | None = None
@@ -40,7 +38,7 @@ class ZoomController:
         *,
         armed: bool,
         now: float | None = None,
-    ) -> str | None:
+    ) -> Intent | None:
         now = monotonic() if now is None else now
         if not armed or index_tips is None:
             self.reset()
@@ -73,7 +71,6 @@ class ZoomController:
             return None
 
         zoom_in = delta > 0
-        self._keyboard.hotkey("ctrl", "add" if zoom_in else "subtract")
         self._reference_distance = current_distance
         self._last_action_at = now
-        return "Zoom + enviado" if zoom_in else "Zoom - enviado"
+        return Intent(IntentKind.ZOOM_IN if zoom_in else IntentKind.ZOOM_OUT)

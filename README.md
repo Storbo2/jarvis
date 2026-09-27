@@ -10,14 +10,15 @@ La versión actual permite:
 - detectar hasta dos manos y dibujar sus 21 landmarks;
 - mostrar lateralidad y confianza de la detección;
 - reconocer índice, pinza y palma abierta, además de pulgar arriba/abajo, pulgar lateral, V, C e `ILoveYou`;
-- mover el mouse, hacer clic y arrastrar con una mano;
+- mover el mouse, hacer clic izquierdo, doble clic, clic derecho y arrastrar con una mano;
 - copiar y pegar con C y V sostenidas, y seleccionar todo con una V invertida;
 - controlar el zoom con dos pinzas, una en cada mano;
 - recolocar la mano con un puño frontal, sin interferir con la pinza;
-- desplazar la página, cambiar de aplicación y deshacer o rehacer usando dos manos;
+- desplazar la página, cambiar de aplicación, controlar multimedia y deshacer o rehacer usando dos manos;
+- tomar, mover, maximizar y encajar la ventana activa usando una garra y la otra mano;
 - iniciar el recorte de pantalla con `ILoveYou` y mostrar avisos breves sobre el escritorio;
 - dictar con pulgar arriba, transcribir localmente con Whisper large-v3 y escribir en la ventana activa;
-- liberar el botón y desactivar el control con la palma abierta sostenida;
+- liberar el botón y desactivar el control con dos palmas abiertas sostenidas;
 - mostrar FPS y salir de forma segura con `Ctrl+Q`.
 
 Consulta [GESTURES.md](GESTURES.md) para la lista completa de gestos y funciones.
@@ -60,10 +61,15 @@ uv run asistente-jarvis control
 El control empieza pausado. Pulsa `F8` para activarlo; `F8` vuelve a pausarlo.
 Este atajo funciona aunque estés haciendo clic en otra ventana. `Ctrl+Q`
 cierra el programa; `Esc` queda disponible para la aplicación activa. Mantén
-la palma abierta **2 segundos** para hacer STOP, cancelar el dictado y pausar
+ambas palmas abiertas **2 segundos** para hacer STOP, cancelar el dictado y pausar
 el control; pulsa `F8` para reactivarlo. Al sacar las manos del encuadre se
 libera cualquier arrastre y se detiene el cursor, pero el control queda activo.
 Las esquinas de la pantalla conservan el mecanismo de seguridad de PyAutoGUI.
+La cámara se abre como un panel compacto de 480×360 siempre visible, desplazado
+desde los bordes superior y derecho para no bloquear botones ni barras de
+desplazamiento. Puedes moverlo o redimensionarlo manualmente. Su cabecera,
+colores cian y naranja y estados `ONLINE`/`STANDBY` forman la primera versión
+del estilo visual de Jarvis.
 
 Con el control activo, señala con el índice y mueve la mano para desplazar el
 cursor desde su posición actual. La posición permanece quieta al formar una
@@ -76,6 +82,14 @@ tres imágenes descarta saltos aislados; el suavizado se adapta a la velocidad:
 estabiliza el cursor en reposo y responde más rápido a movimientos amplios.
 Este filtro se reinicia al dejar de señalar, para que volver al índice no
 desplace el cursor de golpe. El arrastre por pinza conserva su propio movimiento.
+
+Para hacer clic derecho, mantén extendido el índice, levanta el dedo medio y
+junta su punta con el pulgar durante 0,32 segundos. Anular y meñique pueden
+quedar plegados. El índice debe permanecer separado del pulgar para distinguirlo
+de la pinza izquierda. El dedo medio levantado evita que el pulgar apoyado sobre
+una mano cerrada se interprete como clic. Se ejecuta una vez y debes
+separar los dedos antes de repetir. `F10` muestra las proporciones de ambas
+pinzas y si la postura del medio está lista para facilitar el ajuste.
 
 Pulsa `F9` en `control` para abrir el panel de calibración. Ajusta **sensibilidad**
 (distancia recorrida), **estabilidad** (suavidad del índice) y **zona muerta**
@@ -103,7 +117,10 @@ mientras recolocas la mano. Una mano cerrada sin esa orientación se muestra
 como `MANO CERRADA` y no tiene prioridad sobre la pinza.
 
 Para copiar, selecciona texto con el mouse y mantén la C durante al menos 0,45
-segundos. Para pegar, enfoca el campo de destino y mantén la V el mismo tiempo.
+segundos. Para pegar, enfoca el campo de destino y mantén la V con el pulgar
+plegado el mismo tiempo. Si el pulgar está levantado, se muestra `PREPARANDO
+PINZA` y no se envía `Ctrl+V`, lo que permite pasar entre las pinzas izquierda
+y derecha sin pegar accidentalmente.
 Cada gesto envía una sola combinación de teclas; suéltalo y vuelve a formarlo
 para repetir. La ventana muestra `Ctrl+C enviado` o `Ctrl+V enviado` al activarse.
 Las combinaciones se envían a la aplicación que tenga el foco en Windows.
@@ -116,19 +133,41 @@ escritorio se envía `Ctrl+E`; en otras aplicaciones se envía `Ctrl+A`. Puedes 
 Para zoom, muestra una pinza con cada mano durante 0,35 segundos. Separa las
 manos para acercar y júntalas para alejar. Se envían `Ctrl` más suma o resta
 del teclado numérico; la aplicación activa debe admitir esos atajos. Con dos
-manos visibles se suspenden los controles de una mano. STOP funciona con
-cualquiera de las dos manos.
+manos visibles se suspenden los controles de una mano. STOP requiere ambas
+palmas abiertas durante dos segundos.
 
 Con un puño fijo y el índice de la otra mano puedes desplazar vertical u
-horizontalmente. Con un puño fijo y una V en la otra mano se abre `Alt+Tab`;
-inclina la mano en el plano de la cámara hacia un lado para recorrer las ventanas. Mantener
-la inclinación repite los pasos sin exigir un desplazamiento largo de la mano.
+horizontalmente. Con un puño fijo y una V en la otra mano se abre `Alt+Tab`
+después de 0,28 s; inclina la mano unos 10° en el plano de la cámara hacia un
+lado para recorrer las ventanas. El primer cruce avanza inmediatamente y
+mantener la inclinación repite los pasos con más velocidad cuanto mayor sea el giro.
 Suelta el puño para seleccionar. STOP, `F8` y la pérdida de una mano
 sueltan `Alt`. Con un puño y el pulgar de la otra mano hacia la izquierda o la
 derecha se envía `Ctrl+Z` o `Ctrl+Y`, respectivamente.
 Si el detector confunde ese puño con una pinza, el control de dos manos usa
 el gesto de la otra mano para mantener el puño como modificador. Dos pinzas
 siguen reservadas para el zoom.
+
+Un puño con pulgar arriba o abajo ajusta el volumen; mantenlo para repetir.
+Un puño con la otra palma abierta reproduce o pausa. Un puño con índice y meñique
+extendidos, inclinados levemente a la izquierda o derecha, selecciona la pista anterior
+o siguiente. Consulta [GESTURES.md](GESTURES.md) para las posiciones exactas.
+
+Para mover la ventana activa, muestra una sola mano y forma una **garra** con
+todos los dedos plegados y las puntas hacia la cámara durante 0,52 s. La ventana se toma por la barra de
+título y se restaura si estaba maximizada. Mantén la garra para arrastrarla;
+abre esa mano para maximizarla o levanta solamente el índice para soltarla y
+retomar el cursor. Mientras la tomas, señala con la otra mano a
+izquierda/derecha para una mitad. Con más de un
+monitor, lleva la garra desde el centro hasta el borde de la cámara para enviar
+la ventana al monitor vecino. La garra no inicia la toma cuando hay dos manos,
+por lo que el puño modificador conserva prioridad en los controles multimedia.
+Un movimiento rápido de la garra hacia la parte inferior minimiza la ventana y
+libera el cursor. La detección combina velocidad, recorrido y posición final
+medidos sobre varios fotogramas para reconocer un descenso firme sin exigir un
+pico de velocidad difícil de reproducir.
+El modo F11 de un navegador debe salir antes con
+su atajo propio.
 
 Mantener `ILoveYou` con una mano durante 0,45 segundos abre el recorte de
 pantalla de Windows (`Win+Shift+S`). Señala con el índice para colocar el cursor,
@@ -153,7 +192,7 @@ para terminar. Mientras grabas, el audio se procesa al detectar una pausa breve
 o, como máximo, cada tres segundos y el texto aparece en el campo
 enfocado. Al terminar, se procesan los fragmentos restantes. La grabación tiene
 un límite de 60 segundos. Durante el dictado se suspenden el mouse y los otros
-gestos; STOP sostenido 2 segundos o `F8` cancelan. El primer fragmento puede tardar más al cargar el
+gestos; dos palmas sostenidas 2 segundos o `F8` cancelan. El primer fragmento puede tardar más al cargar el
 modelo. El audio se mantiene en memoria y no se guarda en disco.
 
 Whisper puede agregar signos por su cuenta. Jarvis descarta esos signos y
@@ -201,7 +240,8 @@ Durante la vista previa prueba estos gestos frente a la cámara:
 |---|---|
 | Índice extendido y otros tres dedos plegados | `INDICE` |
 | Pulgar e índice juntos | `PINZA` |
-| Cuatro dedos extendidos, juntos o separados; pulgar libre | `STOP / PALMA ABIERTA` |
+| Pulgar y medio juntos, con el índice extendido | `PINZA MEDIA / CLIC DERECHO` |
+| Cuatro dedos extendidos, juntos o separados; pulgar libre | `PALMA ABIERTA` |
 | Pulgar arriba y demás dedos plegados | `PULGAR ARRIBA` |
 | Índice y medio extendidos y separados | `V / DOS DEDOS`: pegar |
 | Índice y medio extendidos, separados y apuntando hacia abajo | `A / V INVERTIDA`: seleccionar todo |
@@ -229,6 +269,7 @@ Consulta todas las opciones con `uv run asistente-jarvis preview --help`.
 
 ```text
 src/asistente_jarvis/
+  application/ intenciones semánticas, resolución y ejecución de acciones
   vision/    captura, modelo, seguimiento de manos y vista previa
   gestures/  geometría y clasificación preliminar
   controls/  control de mouse y atajos
@@ -239,5 +280,12 @@ src/asistente_jarvis/
 tests/
 data/        datos locales, excluidos de Git
 ```
+
+Los controladores de gestos producen intenciones como `copy`, `zoom_in` o
+`switch_next` sin enviar teclas directamente. `IntentResolver` coordina los
+estados de una y dos manos; `ActionDispatcher` es el único punto que ejecuta
+atajos, rueda y modificadores en Windows. Este último conserva en memoria las
+50 acciones recientes y garantiza que `Alt` se libere al pausar, hacer STOP,
+perder una mano o cerrar el programa.
 
 Modelos descargados, pesos, grabaciones y datos de entrenamiento van en `models/`, `data/` o `artifacts/`; esas rutas quedan fuera de Git. Los archivos pequeños de configuración de ejemplo sí se versionan.

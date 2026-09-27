@@ -4,16 +4,22 @@ from dataclasses import dataclass
 from pathlib import Path
 from time import monotonic
 
+from asistente_jarvis.application.dispatcher import ActionDispatcher
+from asistente_jarvis.application.intents import ActionResult, Intent
+from asistente_jarvis.application.resolver import IntentResolver
 from asistente_jarvis.config.cursor import (
     CursorCalibration, load_cursor_calibration, save_cursor_calibration,
 )
 from asistente_jarvis.controls.mouse import MouseController, MouseSettings
 from asistente_jarvis.controls.overlay import CommandOverlay
-from asistente_jarvis.controls.shortcuts import ShortcutController, ShortcutSettings
-from asistente_jarvis.controls.two_hands import TwoHandController
-from asistente_jarvis.controls.zoom import ZoomController
+from asistente_jarvis.controls.window import WindowController
 from asistente_jarvis.gestures.detector import (
-    GESTURE_LABELS, Gesture, GestureResult, recognize_gesture,
+    GESTURE_LABELS,
+    INDEX_PINCH_THRESHOLD,
+    MIDDLE_PINCH_THRESHOLD,
+    Gesture,
+    GestureResult,
+    recognize_gesture,
 )
 from asistente_jarvis.gestures.geometry import NormalizedPoint, distance
 from asistente_jarvis.vision.hand_tracker import HandObservation, HandTracker
@@ -27,6 +33,11 @@ HAND_CONNECTIONS = (
     (9, 13), (13, 14), (14, 15), (15, 16),
     (13, 17), (17, 18), (18, 19), (19, 20), (0, 17),
 )
+
+WINDOW_TITLE = "JARVIS // VISION LINK"
+HUD_CYAN = (255, 225, 40)
+HUD_ORANGE = (40, 110, 255)
+HUD_DARK = (12, 22, 30)
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,6 +83,30 @@ def _pixel(point: NormalizedPoint, width: int, height: int) -> tuple[int, int]:
     return int(point.x * width), int(point.y * height)
 
 
+def _draw_hud_frame(cv2: object, frame: object, *, armed: bool) -> None:
+    height, width = frame.shape[:2]
+    color = HUD_CYAN if armed else HUD_ORANGE
+    cv2.rectangle(frame, (0, 0), (width - 1, 31), HUD_DARK, -1)
+    cv2.line(frame, (0, 32), (width, 32), color, 1, cv2.LINE_AA)
+    cv2.putText(
+        frame, "J.A.R.V.I.S  //  VISION LINK", (14, 22),
+        cv2.FONT_HERSHEY_DUPLEX, 0.55, color, 1, cv2.LINE_AA,
+    )
+    state = "ONLINE" if armed else "STANDBY"
+    state_width = cv2.getTextSize(state, cv2.FONT_HERSHEY_DUPLEX, 0.48, 1)[0][0]
+    cv2.putText(
+        frame, state, (width - state_width - 14, 22),
+        cv2.FONT_HERSHEY_DUPLEX, 0.48, color, 1, cv2.LINE_AA,
+    )
+    corner = 20
+    for x, y, sx, sy in (
+        (5, 38, 1, 1), (width - 6, 38, -1, 1),
+        (5, height - 6, 1, -1), (width - 6, height - 6, -1, -1),
+    ):
+        cv2.line(frame, (x, y), (x + sx * corner, y), color, 1, cv2.LINE_AA)
+        cv2.line(frame, (x, y), (x, y + sy * corner), color, 1, cv2.LINE_AA)
+
+
 def _draw_hand(
     cv2: object,
     frame: object,
@@ -82,14 +117,14 @@ def _draw_hand(
     display_gesture: Gesture | None = None,
 ) -> None:
     height, width = frame.shape[:2]
-    color = (0, 90, 255) if result.gesture is Gesture.OPEN_PALM else (40, 220, 120)
+    color = (40, 110, 255) if result.gesture is Gesture.OPEN_PALM else (255, 225, 40)
 
     for start, end in HAND_CONNECTIONS:
         cv2.line(
             frame,
             _pixel(observation.landmarks[start], width, height),
             _pixel(observation.landmarks[end], width, height),
-            (180, 180, 180),
+            (120, 185, 205),
             2,
             cv2.LINE_AA,
         )
@@ -103,9 +138,10 @@ def _draw_hand(
         else GESTURE_LABELS[shown]
     )
     title = f"{label}  |  {observation.handedness} {observation.confidence:.0%}"
-    top = 12 + line * 44
-    cv2.rectangle(frame, (12, top), (min(width - 12, 520), top + 43), (20, 20, 20), -1)
-    cv2.putText(frame, title, (24, top + 31), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2, cv2.LINE_AA)
+    top = 42 + line * 42
+    cv2.rectangle(frame, (12, top), (min(width - 12, 520), top + 39), (12, 22, 30), -1)
+    cv2.rectangle(frame, (12, top), (min(width - 12, 520), top + 39), color, 1)
+    cv2.putText(frame, title, (24, top + 27), cv2.FONT_HERSHEY_DUPLEX, 0.58, color, 1, cv2.LINE_AA)
 
 
 def _two_hand_gestures(
@@ -117,8 +153,18 @@ def _two_hand_gestures(
     gestures = [result.gesture for result in results]
     if len(gestures) != 2:
         raise ValueError("Se esperan exactamente dos manos.")
-    if Gesture.OPEN_PALM in gestures:
-        return gestures[0], gestures[1]
+    grab_indexes = [
+        index for index, gesture in enumerate(gestures)
+        if gesture is Gesture.WINDOW_GRAB
+    ]
+    if len(grab_indexes) == 1:
+        other = 1 - grab_indexes[0]
+        if gestures[other] in (
+            Gesture.POINTING, Gesture.VICTORY, Gesture.PINCH_PREPARATION,
+            Gesture.THUMBS_LEFT, Gesture.THUMBS_RIGHT, Gesture.THUMBS_UP,
+            Gesture.THUMBS_DOWN, Gesture.OPEN_PALM, Gesture.I_LOVE_YOU, Gesture.ROCK,
+        ):
+            gestures[grab_indexes[0]] = Gesture.CLOSED_HAND
 
     pinch_indexes = [
         index for index, result in enumerate(results)
@@ -135,15 +181,20 @@ def _two_hand_gestures(
     elif len(pinch_indexes) == 1:
         other = 1 - pinch_indexes[0]
         if gestures[other] in (
-            Gesture.POINTING, Gesture.VICTORY,
-            Gesture.THUMBS_LEFT, Gesture.THUMBS_RIGHT,
+            Gesture.POINTING, Gesture.VICTORY, Gesture.PINCH_PREPARATION,
+            Gesture.THUMBS_LEFT, Gesture.THUMBS_RIGHT, Gesture.THUMBS_UP,
+            Gesture.THUMBS_DOWN, Gesture.OPEN_PALM, Gesture.I_LOVE_YOU, Gesture.ROCK,
         ):
             gestures[pinch_indexes[0]] = Gesture.CLOSED_HAND
     return gestures[0], gestures[1]
 
 
 def _draw_cursor_diagnostics(
-    cv2: object, frame: object, mouse: MouseController, calibration: CursorCalibration
+    cv2: object,
+    frame: object,
+    mouse: MouseController,
+    calibration: CursorCalibration,
+    gesture_result: GestureResult | None,
 ) -> None:
     height, width = frame.shape[:2]
     raw, filtered, target = mouse.cursor_diagnostics
@@ -160,15 +211,35 @@ def _draw_cursor_diagnostics(
         f"estabilidad {calibration.stability:.2f}  zona {calibration.deadzone_pixels:.1f}px",
         f"Bruto: {raw.x:.3f}, {raw.y:.3f}" if raw else "Bruto: --",
         f"Filtrado: {filtered.x:.3f}, {filtered.y:.3f}" if filtered else "Filtrado: --",
+        (
+            f"Pinza indice: {gesture_result.pinch_ratio:.2f}/{INDEX_PINCH_THRESHOLD:.2f} | "
+            f"medio: {gesture_result.middle_pinch_ratio:.2f}/{MIDDLE_PINCH_THRESHOLD:.2f} | "
+            f"listo: {'SI' if gesture_result.middle_pinch_ready else 'NO'}"
+            if gesture_result is not None else "Pinzas: --"
+        ),
         f"Destino: {target[0]:.0f}, {target[1]:.0f} px | Real: "
         f"{actual[0]:.0f}, {actual[1]:.0f} px" if target else
         f"Destino: -- | Real: {actual[0]:.0f}, {actual[1]:.0f} px",
     )
-    top = max(100, height - 151)
-    cv2.rectangle(frame, (8, top), (min(width - 8, 565), top + 116), (20, 20, 20), -1)
+    top = max(100, height - 179)
+    cv2.rectangle(frame, (8, top), (min(width - 8, 565), top + 144), (20, 20, 20), -1)
     for index, line in enumerate(lines):
         cv2.putText(frame, line, (16, top + 23 + index * 28),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (230, 235, 235), 1, cv2.LINE_AA)
+
+
+def _dispatch_intents(
+    dispatcher: ActionDispatcher, intents: tuple[Intent, ...]
+) -> ActionResult:
+    combined = ActionResult()
+    for intent in intents:
+        current = dispatcher.dispatch(intent)
+        combined = ActionResult(
+            message=current.message or combined.message,
+            overlay_message=current.overlay_message or combined.overlay_message,
+            begin_snip=current.begin_snip or combined.begin_snip,
+        )
+    return combined
 
 
 def run_preview(options: PreviewOptions) -> int:
@@ -194,13 +265,12 @@ def run_preview(options: PreviewOptions) -> int:
             jitter_pixels=calibration.deadzone_pixels,
         )) if options.control_mouse else None
     )
-    shortcuts = (
-        ShortcutController(ShortcutSettings(select_all_mode=options.select_all_mode))
-        if options.control_mouse
-        else None
+    resolver = IntentResolver() if options.control_mouse else None
+    dispatcher = (
+        ActionDispatcher(select_all_mode=options.select_all_mode)
+        if options.control_mouse else None
     )
-    zoom = ZoomController() if options.control_mouse else None
-    two_hands = TwoHandController() if options.control_mouse else None
+    window = WindowController() if options.control_mouse else None
     dictation = (
         DictationController(
             DEFAULT_WHISPER_MODEL_PATH,
@@ -212,6 +282,21 @@ def run_preview(options: PreviewOptions) -> int:
     capture = _open_camera(cv2, options.camera_index, options.backend)
     overlay: CommandOverlay | None = None
     user32 = ctypes.windll.user32
+    preview_width, preview_height = 480, 360
+    screen_width = user32.GetSystemMetrics(0)
+    cv2.namedWindow(WINDOW_TITLE, cv2.WINDOW_NORMAL)
+    cv2.resizeWindow(WINDOW_TITLE, preview_width, preview_height)
+    cv2.moveWindow(
+        WINDOW_TITLE,
+        max(24, screen_width - preview_width - 120),
+        64,
+    )
+    topmost_property = getattr(cv2, "WND_PROP_TOPMOST", None)
+    if topmost_property is not None:
+        try:
+            cv2.setWindowProperty(WINDOW_TITLE, topmost_property, 1)
+        except cv2.error:
+            print("Aviso: OpenCV no pudo mantener la cámara siempre visible.")
     exit_hotkey_id = 0x4A52
     hotkey_registered = bool(user32.RegisterHotKey(None, exit_hotkey_id, 0x4002, 0x51))
     if not hotkey_registered:
@@ -255,11 +340,14 @@ def run_preview(options: PreviewOptions) -> int:
                     recognize_gesture(observation.landmarks, aspect_ratio=width / height)
                     for observation in observations
                 ]
+                _draw_hud_frame(
+                    cv2, frame, armed=mouse is None or mouse.armed
+                )
                 two_hand_gestures = (
                     _two_hand_gestures(
                         results,
                         observations,
-                        two_hands.modifier_wrist if two_hands is not None else None,
+                        resolver.modifier_wrist if resolver is not None else None,
                     )
                     if len(observations) == 2 else None
                 )
@@ -270,6 +358,7 @@ def run_preview(options: PreviewOptions) -> int:
                     )
 
                 if mouse is not None:
+                    assert resolver is not None and dispatcher is not None
                     f9_is_down = bool(user32.GetAsyncKeyState(0x78) & 0x8000)
                     if f9_is_down and not f9_was_down:
                         if calibration_panel is None:
@@ -278,9 +367,8 @@ def run_preview(options: PreviewOptions) -> int:
                                     overlay.show("Termina el dictado antes de calibrar")
                             else:
                                 mouse.cancel_gesture()
-                                shortcuts.reset()
-                                zoom.reset()
-                                two_hands.reset()
+                                window.cancel()
+                                _dispatch_intents(dispatcher, resolver.reset_all())
                                 calibration_panel = CalibrationPanel(cv2, calibration)
                         else:
                             calibration = calibration_panel.values()
@@ -288,6 +376,7 @@ def run_preview(options: PreviewOptions) -> int:
                             calibration_panel.close()
                             calibration_panel = None
                             mouse.cancel_gesture()
+                            window.cancel()
                             if overlay is not None:
                                 overlay.show("Calibracion guardada")
                     f9_was_down = f9_is_down
@@ -306,16 +395,20 @@ def run_preview(options: PreviewOptions) -> int:
                             save_cursor_calibration(calibration)
                             calibration_panel = None
                             mouse.cancel_gesture()
+                            window.cancel()
                     f8_is_down = bool(user32.GetAsyncKeyState(0x77) & 0x8000)
                     if f8_is_down and not f8_was_down:
                         if mouse.armed:
                             dictation.cancel()
                             dictation_writer = None
                             mouse.stop()
+                            window.cancel()
+                            _dispatch_intents(dispatcher, resolver.reset_all())
                         else:
                             mouse.arm()
                     f8_was_down = f8_is_down
                     action = None
+                    gesture_result = ActionResult()
                     for speech_event in dictation.poll():
                         event_action = None
                         if speech_event.kind == "text":
@@ -353,6 +446,58 @@ def run_preview(options: PreviewOptions) -> int:
                                 overlay.show(event_action)
                     gesture = results[0].gesture if len(results) == 1 else None
                     now = monotonic()
+                    both_palms = (
+                        len(results) == 2
+                        and all(
+                            result.gesture is Gesture.OPEN_PALM
+                            for result in results
+                        )
+                    )
+                    window_hand_index: int | None = None
+                    if both_palms and window.grabbing:
+                        action = window.cancel()
+                    elif window.grabbing and not observations:
+                        action = window.cancel()
+                    elif window.grabbing and observations and window.grab_wrist is not None:
+                        window_hand_index = min(
+                            range(len(observations)),
+                            key=lambda index: distance(
+                                observations[index].landmarks[0], window.grab_wrist
+                            ),
+                        )
+                    elif not window.grabbing and len(observations) == 1:
+                        grabs = [
+                            index for index, result in enumerate(results)
+                            if result.gesture is Gesture.WINDOW_GRAB
+                        ]
+                        if grabs:
+                            window_hand_index = grabs[0]
+                        elif window.candidate:
+                            window.update(None, None, now=now)
+                    elif window.candidate:
+                        # Una segunda mano o un cambio de pose invalida la
+                        # confirmación: la garra debe sostenerse de continuo.
+                        window.update(None, None, now=now)
+                    handling_window = window_hand_index is not None or action == "Ventana liberada"
+                    if window_hand_index is not None:
+                        mouse.cancel_gesture()
+                        _dispatch_intents(dispatcher, resolver.reset_all())
+                        window_action = window.update(
+                            results[window_hand_index].gesture,
+                            observations[window_hand_index].landmarks,
+                            now=now,
+                        )
+                        if window.grabbing and len(observations) == 2:
+                            other_index = 1 - window_hand_index
+                            if results[other_index].gesture is Gesture.POINTING:
+                                snap_action = window.snap(
+                                    observations[other_index].landmarks[8], now=now
+                                )
+                                window_action = snap_action or window_action
+                        if window_action is not None:
+                            action = window_action
+                            if overlay is not None:
+                                overlay.show(window_action)
                     if (gesture in (Gesture.THUMBS_UP, Gesture.THUMBS_DOWN)
                             and mouse.armed and calibration_panel is None):
                         if gesture is not thumb_pose:
@@ -369,9 +514,7 @@ def run_preview(options: PreviewOptions) -> int:
                                         dictation_writer = DictationWriter(dictation_window)
                                         action = "Dictado: habla ahora"
                                         mouse.cancel_gesture()
-                                        shortcuts.reset()
-                                        zoom.reset()
-                                        two_hands.reset()
+                                        _dispatch_intents(dispatcher, resolver.reset_all())
                                     except (FileNotFoundError, RuntimeError) as exc:
                                         action = "Whisper no disponible"
                                         print(f"Error de dictado: {exc}")
@@ -386,7 +529,7 @@ def run_preview(options: PreviewOptions) -> int:
                         thumb_latched = False
                     stop_seen = (
                         calibration_panel is None
-                        and any(result.gesture is Gesture.OPEN_PALM for result in results)
+                        and both_palms
                     )
                     if stop_seen:
                         if stop_started is None:
@@ -403,9 +546,7 @@ def run_preview(options: PreviewOptions) -> int:
                         stop_started = None
                         stop_latched = False
                     if calibration_panel is not None:
-                        shortcuts.reset()
-                        zoom.reset()
-                        two_hands.reset()
+                        _dispatch_intents(dispatcher, resolver.reset_all())
                         mouse.observe_cursor(
                             results[0].gesture if len(results) == 1 else None,
                             observations[0].landmarks if len(observations) == 1 else None,
@@ -414,90 +555,74 @@ def run_preview(options: PreviewOptions) -> int:
                     elif stop_seen:
                         # Durante la confirmación no se activa ningún otro gesto.
                         mouse.cancel_gesture()
-                        shortcuts.reset()
-                        zoom.reset()
-                        two_hands.reset()
+                        _dispatch_intents(dispatcher, resolver.reset_all())
                     elif dictation.busy:
                         mouse.cancel_gesture()
-                        shortcuts.reset()
-                        zoom.reset()
-                        two_hands.reset()
+                        _dispatch_intents(dispatcher, resolver.reset_all())
+                    elif handling_window:
+                        mouse.cancel_gesture()
+                        _dispatch_intents(dispatcher, resolver.reset_all())
                     elif len(observations) == 2:
                         waiting_for_pinch_release = True
                         mouse.cancel_gesture()
-                        shortcuts.reset()
                         gestures = two_hand_gestures
                         landmarks_pair = (observations[0].landmarks, observations[1].landmarks)
-                        if any(
-                            gesture in (Gesture.FIST, Gesture.CLOSED_HAND)
-                            for gesture in gestures
-                        ) or two_hands.mode == "switch":
-                            if two_hands.mode == "switch":
-                                zoom.reset()
-                            else:
-                                zoom.update(
-                                    gestures,
-                                    (landmarks_pair[0][8], landmarks_pair[1][8]),
-                                    armed=mouse.armed,
-                                )
-                            action = two_hands.update(
+                        gesture_result = _dispatch_intents(
+                            dispatcher,
+                            resolver.resolve_two_hands(
                                 gestures,
                                 landmarks_pair,
                                 armed=mouse.armed,
-                            )
-                        else:
-                            two_hands.reset()
-                            action = zoom.update(
-                                gestures,
-                                (landmarks_pair[0][8], landmarks_pair[1][8]),
-                                armed=mouse.armed,
-                            )
+                                now=now,
+                            ),
+                        )
+                        if gesture_result.message is not None:
+                            action = gesture_result.message
                     else:
-                        zoom.reset()
-                        two_hands.reset()
                         gesture = results[0].gesture if results else None
                         landmarks = observations[0].landmarks if observations else None
                         pinch_ratio = results[0].pinch_ratio if results else None
                         if waiting_for_pinch_release and gesture is Gesture.PINCH:
                             mouse.cancel_gesture()
-                            shortcuts.reset()
+                            gesture_result = _dispatch_intents(
+                                dispatcher, resolver.reset_all()
+                            )
                         else:
                             if gesture is not None:
                                 waiting_for_pinch_release = False
                             mouse.update(gesture, landmarks, pinch_ratio=pinch_ratio)
-                            action = shortcuts.update(
-                                gesture,
-                                armed=mouse.armed,
-                                dragging=mouse.dragging,
+                            gesture_result = _dispatch_intents(
+                                dispatcher,
+                                resolver.resolve_single_hand(
+                                    gesture,
+                                    armed=mouse.armed,
+                                    dragging=mouse.dragging or mouse.snip_mode,
+                                    now=now,
+                                ),
                             )
+                        if gesture_result.message is not None:
+                            action = gesture_result.message
+                    if gesture_result.begin_snip:
+                        mouse.begin_snip()
+                    if gesture_result.overlay_message and overlay is not None:
+                        overlay.show(gesture_result.overlay_message)
                     if not mouse.armed:
                         shortcut_feedback = None
                     if action is not None:
                         shortcut_feedback = (action, monotonic())
-                        if action.startswith("Recorte"):
-                            mouse.begin_snip()
-                        if overlay is not None and (
-                            action.startswith("Ctrl+")
-                            or action.startswith("Recorte")
-                            or action.startswith("Alt+Tab")
-                            or action.startswith("Ventana")
-                        ):
-                            overlay.show(
-                                "Recorte: señala, pinza y arrastra"
-                                if action.startswith("Recorte")
-                                else "Alt+Tab: inclina V a un lado"
-                                if action.startswith("Alt+Tab")
-                                else action
-                            )
 
                     if calibration_panel is not None:
                         status = "CALIBRACION: AJUSTA CONTROLES; F9 GUARDA"
                     elif stop_seen and not stop_latched:
-                        status = f"STOP: MANTEN PALMA {max(0, stop_hold_seconds - (now - stop_started)):.1f} S"
+                        status = f"STOP: MANTEN AMBAS PALMAS {max(0, stop_hold_seconds - (now - stop_started)):.1f} S"
                     elif dictation.state == "recording":
                         status = "DICTANDO: PULGAR ABAJO PARA TERMINAR"
                     elif dictation.state == "finishing":
                         status = "PROCESANDO ULTIMOS FRAGMENTOS"
+                    elif window.grabbing:
+                        status = "VENTANA TOMADA: ABRE LA MANO PARA MAXIMIZAR"
+                    elif window.candidate:
+                        status = "TOMAR VENTANA: MANTEN LA GARRA"
                     elif mouse.dragging:
                         status = "RECORTANDO" if mouse.snip_mode else "ARRASTRANDO"
                     elif not mouse.armed:
@@ -505,16 +630,23 @@ def run_preview(options: PreviewOptions) -> int:
                     elif mouse.snip_mode:
                         status = "RECORTE: INDICE, LUEGO PINZA"
                     elif len(observations) == 2:
-                        if two_hands.mode == "switch":
-                            side = "DER" if two_hands.switch_tilt >= 0 else "IZQ"
-                            status = (
-                                f"ALT+TAB: {side} {abs(two_hands.switch_tilt):.0f}"
-                                "/14 GRADOS"
+                        if resolver.two_hand_mode == "switch":
+                            tilt = resolver.switch_tilt
+                            side = (
+                                "CENTRO"
+                                if abs(tilt) < resolver.switch_threshold
+                                else "DER" if tilt > 0 else "IZQ"
                             )
-                        elif two_hands.mode == "scroll":
+                            status = (
+                                f"ALT+TAB: {side} {abs(tilt):.0f}"
+                                f"/{resolver.switch_threshold:.0f} GRADOS"
+                            )
+                        elif resolver.two_hand_mode == "scroll":
                             status = "SCROLL / INDICE + PUNO"
-                        elif two_hands.mode == "thumb":
+                        elif resolver.two_hand_mode == "thumb":
                             status = "DESHACER / REHACER"
+                        elif resolver.two_hand_mode == "media":
+                            status = "MULTIMEDIA / PUNO + GESTO"
                         elif two_hand_gestures == (Gesture.PINCH, Gesture.PINCH):
                             status = "ZOOM 2 MANOS"
                         else:
@@ -525,15 +657,15 @@ def run_preview(options: PreviewOptions) -> int:
                         status = "CURSOR QUIETO"
                     else:
                         status = "ACTIVO"
-                    status_y = 82 + max(0, len(observations) - 1) * 44
+                    status_y = 84 + max(0, len(observations) - 1) * 42
                     cv2.putText(
                         frame,
                         f"{status} | F8 pausa | Ctrl+Q salir",
                         (16, status_y),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.55,
-                        (0, 90, 255) if mouse.dragging else (40, 220, 120),
-                        2,
+                        cv2.FONT_HERSHEY_DUPLEX,
+                        0.48,
+                        HUD_ORANGE if mouse.dragging else HUD_CYAN,
+                        1,
                         cv2.LINE_AA,
                     )
                     if shortcut_feedback is not None and monotonic() - shortcut_feedback[1] < 1.4:
@@ -541,14 +673,20 @@ def run_preview(options: PreviewOptions) -> int:
                             frame,
                             shortcut_feedback[0],
                             (16, status_y + 28),
-                            cv2.FONT_HERSHEY_SIMPLEX,
-                            0.65,
-                            (40, 220, 120),
-                            2,
+                            cv2.FONT_HERSHEY_DUPLEX,
+                            0.56,
+                            HUD_CYAN,
+                            1,
                             cv2.LINE_AA,
                         )
                     if diagnostic_visible or calibration_panel is not None:
-                        _draw_cursor_diagnostics(cv2, frame, mouse, calibration)
+                        _draw_cursor_diagnostics(
+                            cv2,
+                            frame,
+                            mouse,
+                            calibration,
+                            results[0] if len(results) == 1 else None,
+                        )
 
                 now = monotonic()
                 if overlay is not None:
@@ -558,15 +696,15 @@ def run_preview(options: PreviewOptions) -> int:
                 last_frame_at = now
                 cv2.putText(
                     frame,
-                    f"{fps:.0f} FPS | Ctrl+Q para salir",
+                    f"SYS {fps:.0f} FPS  //  CTRL+Q EXIT",
                     (16, frame.shape[0] - 18),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.55,
-                    (240, 240, 240),
+                    cv2.FONT_HERSHEY_DUPLEX,
+                    0.45,
+                    HUD_CYAN,
                     1,
                     cv2.LINE_AA,
                 )
-                cv2.imshow("Asistente Jarvis - Reconocimiento preliminar", frame)
+                cv2.imshow(WINDOW_TITLE, frame)
                 hotkey_message = wintypes.MSG()
                 if hotkey_registered:
                     while user32.PeekMessageW(
@@ -595,8 +733,11 @@ def run_preview(options: PreviewOptions) -> int:
             user32.UnregisterHotKey(None, exit_hotkey_id)
         if overlay is not None:
             overlay.close()
-        if two_hands is not None:
-            two_hands.reset()
+        if resolver is not None and dispatcher is not None:
+            _dispatch_intents(dispatcher, resolver.reset_all())
+            dispatcher.close()
+        if window is not None:
+            window.close()
         if mouse is not None:
             mouse.close()
         if dictation is not None:

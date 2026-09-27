@@ -237,6 +237,17 @@ class MouseController:
         if not self.armed:
             return
 
+        if gesture is Gesture.MIDDLE_PINCH and self._pinch_started is not None:
+            # Si el pulgar pasa cerca del índice camino al dedo medio, descarta
+            # esa pinza transitoria para no producir un clic izquierdo previo.
+            self._release()
+            self._pinch_started = None
+            self._pinch_lost_at = None
+            self._pinch_anchor = None
+            self._pinch_screen_origin = None
+            self._target_position = None
+            self._reset_point_filter()
+
         if (
             self._pinch_started is not None
             and gesture is not Gesture.FIST

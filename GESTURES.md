@@ -15,13 +15,18 @@ alterna el diagnóstico visual de puntos bruto/filtrado y posición del cursor.
 | Mano cerrada normal | Deja el cursor quieto; sirve como modificador de dos manos | Disponible |
 | Pinza breve | Clic izquierdo al soltar, sin desplazar el cursor | Disponible |
 | Pinza sostenida al menos 0,45 s | Arrastrar; soltar la pinza termina el arrastre | Disponible |
-| Cuatro dedos largos extendidos, juntos o separados durante 2 s | STOP: libera el mouse, cancela el dictado y pausa el control | Disponible |
+| Dos pinzas breves seguidas sobre el mismo punto | Doble clic izquierdo | Disponible |
+| Pulgar y dedo medio levantado juntos durante 0,32 s, con índice extendido | Clic derecho en la posición actual | Disponible |
+| Palma abierta con una sola mano | Pose disponible para combinaciones; no pausa el control | Disponible |
 | C sostenida al menos 0,45 s | Copiar (`Ctrl+C`) | Disponible |
-| V hacia arriba sostenida al menos 0,45 s | Pegar (`Ctrl+V`) | Disponible |
+| V hacia arriba con pulgar plegado, sostenida al menos 0,45 s | Pegar (`Ctrl+V`) | Disponible |
 | V invertida, dedos hacia abajo, sostenida al menos 0,45 s | Seleccionar todo | Disponible |
 | Pulgar arriba sostenido 0,6 s | Iniciar dictado progresivo con Whisper large-v3 | Disponible |
 | Pulgar abajo sostenido 0,6 s | Terminar dictado y procesar el audio pendiente | Disponible |
 | Pulgar, índice y meñique extendidos (`ILoveYou`) durante 0,45 s | Abrir recorte de pantalla (`Win+Shift+S`) | Disponible |
+| Garra con una sola mano visible: dedos plegados y puntas hacia la cámara, sostenida 0,52 s | Tomar y arrastrar la ventana activa por su barra de título | Disponible |
+| Abrir la mano que sostiene una ventana | Soltar y maximizar la ventana | Disponible |
+| Pasar de la garra al índice levantado | Soltar la ventana y continuar con el cursor | Disponible |
 
 El gesto de seleccionar todo usa `Ctrl+E` en el Explorador de archivos y en
 Word, Excel y PowerPoint de escritorio; usa `Ctrl+A` en las demás aplicaciones.
@@ -44,11 +49,16 @@ arrastre; abrir la pinza lo termina.
 | Una pinza con cada mano; acercar las manos | Zoom − (`Ctrl` y resta del teclado numérico) | Disponible |
 | Un puño + índice de la otra mano hacia arriba/abajo | Desplazamiento vertical | Disponible |
 | Un puño + índice de la otra mano hacia izquierda/derecha | Desplazamiento horizontal | Disponible |
-| Un puño + V de la otra mano durante 0,35 s | Mantener `Alt` y abrir el selector con `Tab` | Disponible |
+| Un puño + V de la otra mano durante 0,28 s | Mantener `Alt` y abrir el selector con `Tab` | Disponible |
 | En el selector, inclinar la muñeca con la V hacia la derecha/izquierda | Ventana siguiente/anterior; sostener la inclinación repite pasos | Disponible |
 | Un puño + pulgar lateral de la otra mano hacia la izquierda durante 0,45 s | Deshacer (`Ctrl+Z`) | Disponible |
 | Un puño + pulgar lateral de la otra mano hacia la derecha durante 0,45 s | Rehacer (`Ctrl+Y`) | Disponible |
-| STOP durante 2 s con cualquiera de las dos manos | Pausar todo y liberar el mouse | Disponible |
+| Un puño + pulgar arriba/abajo | Subir/bajar volumen; mantenerlo repite | Disponible |
+| Un puño + palma abierta durante 0,38 s | Reproducir/pausar multimedia | Disponible |
+| Un puño + cuernos (índice y meñique) con inclinación leve a la izquierda/derecha | Pista anterior/siguiente | Disponible |
+| Mientras tomas una ventana, la otra mano señala a la izquierda/derecha | Encajar en la mitad indicada | Disponible |
+| Con dos o más monitores, llevar la garra con decisión al borde izquierdo/derecho | Enviar la ventana al monitor adyacente | Disponible |
+| Dos palmas abiertas simultáneas durante 2 s | STOP: pausar todo y liberar el mouse | Disponible |
 
 Al aparecer dos manos, se cancelan el clic o arrastre pendiente y los atajos de
 una mano. Mantén ambas pinzas unos 0,35 s para establecer la distancia inicial;
@@ -72,14 +82,15 @@ clasificadas como pinza siguen reservadas para el zoom. Con una sola mano,
 la pinza conserva su prioridad para clic y arrastre.
 
 Para cambiar aplicaciones, mantén un puño fijo y forma una V con la otra mano
-durante 0,35 s. Se mantiene `Alt` y se pulsa `Tab` una vez para abrir el
-selector. Inclina la mano en el plano de la cámara unos 14° hacia la derecha para avanzar o
-hacia la izquierda para retroceder. Si mantienes la inclinación, se repite un
-paso aproximadamente cada 0,32 s y puedes recorrer muchas ventanas sin
+durante 0,28 s. Se mantiene `Alt` y se pulsa `Tab` una vez para abrir el
+selector. Inclina la mano en el plano de la cámara unos 10° hacia la derecha para avanzar o
+hacia la izquierda para retroceder. El primer cruce del umbral avanza de
+inmediato. Si mantienes la inclinación, los pasos se repiten más rápido cuanto
+mayor sea el giro, desde aproximadamente 0,28 hasta 0,12 s, y puedes recorrer muchas ventanas sin
 desplazar el brazo. Devuelve la V a su orientación inicial para detener los
 pasos. Suelta el puño, haz STOP, pausa con `F8` o retira una mano para soltar
 `Alt` y escoger la ventana visible. La cámara indica el giro medido y el umbral
-de 14 grados. Puedes inclinar toda la mano y el antebrazo; girar la palma para
+de 10 grados. Puedes inclinar toda la mano y el antebrazo; girar la palma para
 mostrar su dorso no produce este movimiento. Una vez abierto el selector, se
 sigue el giro aunque el detector deje de mostrar la etiqueta `V` por un instante.
 
@@ -88,11 +99,40 @@ hacia un lado durante 0,45 s. El atajo se envía una vez por postura; vuelve a
 una posición neutra y repite el pulgar para otra acción. La dirección sigue
 la imagen reflejada que muestra la cámara de forma predeterminada.
 
+Para los controles multimedia, usa una mano cerrada como modificador. Con el
+pulgar de la otra mano hacia arriba o abajo subes o bajas el volumen; mantener
+la pose repite pasos cada 0,22 s. Una palma abierta reproduce o pausa una vez por
+postura. Los cuernos usan una inclinación lateral leve de la mano activa: desplázala
+hacia la izquierda para la pista anterior o hacia la derecha para la siguiente.
+La zona neutra de los cuernos se redujo para que no sea necesario inclinar
+tanto la muñeca. Dos palmas abiertas quedan reservadas exclusivamente para STOP.
+
+Para mover una ventana, deja en primer plano la ventana que quieres mover y
+forma una garra con una sola mano visible durante 0,52 s. Si la ventana está maximizada se restaura antes
+de iniciar el arrastre. Mantén la garra para moverla y abre esa mano para
+maximizarla al soltar. Levanta solamente el índice para soltarla en su posición
+y retomar el movimiento normal del cursor. Mientras la arrastras, señala con
+la otra mano a la izquierda o derecha durante 0,35 s para encajarla a una mitad.
+Lleva la garra rápidamente hacia abajo para minimizar la ventana y liberar el
+cursor; se exige velocidad, recorrido y llegar a la zona inferior para no
+confundirlo con un arrastre normal. La velocidad se calcula sobre varios
+fotogramas, así que basta con un gesto descendente firme y continuo.
+Con varios monitores, lleva la garra
+desde el centro hasta un borde de la cámara para enviar la ventana al monitor
+adyacente. Esta acción usa la barra de título de ventanas normales de Windows;
+el modo pantalla completa propio de cada navegador, como F11, debe salir antes
+con su propio atajo.
+
+La toma de ventanas no comienza mientras hay dos manos visibles. En ese caso,
+si el detector confunde el puño modificador con una garra, se interpreta como
+puño para que volumen, reproducción, cambio de pista, scroll y Alt+Tab sigan
+teniendo prioridad.
+
 Los atajos puntuales como copiar, pegar, deshacer, rehacer, seleccionar todo y
 recortar pantalla muestran un aviso pequeño sobre el escritorio durante 1,6 s.
 El aviso no cambia el foco de la aplicación ni bloquea clics.
 
-Durante el dictado, STOP sostenido 2 s o `F8` cancelan la grabación. Deja enfocado el campo
+Durante el dictado, dos palmas sostenidas 2 s o `F8` cancelan la grabación. Deja enfocado el campo
 de texto mientras aparecen los fragmentos transcritos. El audio se conserva
 solo en memoria y la grabación se detiene automáticamente al cumplir 60 segundos.
 Di «coma», «punto» o «dos puntos» para escribir `,`, `.` o `:`; los signos que
@@ -108,6 +148,12 @@ Forma una pinza y, sin soltarla, mueve la mano hasta la esquina opuesta; al
 abrir la pinza se completa el recorte. En este modo la pinza inicia el arrastre
 de inmediato, sin esperar los 0,45 s del arrastre normal. El modo caduca después
 de 30 s o al hacer STOP o pulsar `F8`.
+
+La cámara se muestra en un panel compacto siempre visible en la zona superior
+derecha, separado de los bordes para dejar accesibles los botones y la barra de
+desplazamiento de otras aplicaciones. La interfaz usa una cabecera oscura,
+detalles cian, alertas naranjas y estados `ONLINE`/`STANDBY`. La ventana se puede
+mover o redimensionar manualmente si necesitas otra ubicación.
 
 ## Gestos que MediaPipe ofrece por separado
 
