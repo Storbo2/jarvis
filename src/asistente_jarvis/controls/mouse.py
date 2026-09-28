@@ -9,6 +9,7 @@ from time import monotonic
 from asistente_jarvis.gestures.detector import Gesture
 from asistente_jarvis.gestures.geometry import NormalizedPoint
 from asistente_jarvis.config.cursor import CursorCalibration
+from asistente_jarvis.controls.screen import set_cursor_position, virtual_desktop
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,7 +36,8 @@ class MouseController:
         self.settings = settings or MouseSettings()
         if not 0.1 <= self.settings.sensitivity <= 4.0:
             raise ValueError("La sensibilidad debe estar entre 0.1 y 4.0.")
-        self.width, self.height = self._mouse.size()
+        self._desktop = virtual_desktop()
+        self.width, self.height = self._desktop.width, self._desktop.height
         self.armed = False
         self._pressed = False
         self._pinch_started: float | None = None
@@ -83,6 +85,9 @@ class MouseController:
         self._snip_dragging = False
 
     def arm(self) -> None:
+        # Permite conectar o desconectar monitores antes de reactivar con F8.
+        self._desktop = virtual_desktop()
+        self.width, self.height = self._desktop.width, self._desktop.height
         self.armed = True
         self._clear_tracking()
         self._snip_deadline = None
@@ -197,8 +202,7 @@ class MouseController:
 
     def _move_to(self, target: tuple[float, float], *, pointing: bool = False) -> None:
         old_x, old_y = self._last_position or self._current_position()
-        target_x = max(0.0, min(self.width - 1, target[0]))
-        target_y = max(0.0, min(self.height - 1, target[1]))
+        target_x, target_y = self._desktop.clamp(*target)
         remaining = hypot(target_x - old_x, target_y - old_y)
         if remaining < self.settings.jitter_pixels:
             return
@@ -208,7 +212,8 @@ class MouseController:
         )
         x = old_x + alpha * (target_x - old_x)
         y = old_y + alpha * (target_y - old_y)
-        self._mouse.moveTo(round(x), round(y), duration=0)
+        if not set_cursor_position(x, y):
+            self._mouse.moveTo(round(x), round(y), duration=0)
         self._last_position = (x, y)
 
     def update(
@@ -330,8 +335,7 @@ class MouseController:
                 dx, dy = self._screen_delta(self._pointing_anchor, tip)
                 target_x, target_y = self._target_position or self._current_position()
                 self._target_position = (
-                    max(0.0, min(self.width - 1, target_x + dx)),
-                    max(0.0, min(self.height - 1, target_y + dy)),
+                    *self._desktop.clamp(target_x + dx, target_y + dy),
                 )
                 self._pointing_anchor = tip
                 self._move_to(self._target_position, pointing=True)

@@ -7,6 +7,7 @@ from time import monotonic
 
 from asistente_jarvis.gestures.detector import Gesture
 from asistente_jarvis.gestures.geometry import NormalizedPoint
+from asistente_jarvis.controls.screen import set_cursor_position, virtual_desktop
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,7 +68,8 @@ class WindowController:
             return "No se pudo tomar la ventana"
         x = (rect.left + rect.right) // 2
         y = min(rect.bottom - 4, rect.top + 18)
-        self._input.moveTo(x, y)
+        if not set_cursor_position(x, y):
+            self._input.moveTo(x, y)
         self._input.mouseDown(button="left")
         self._window = window
         self._grabbed = True
@@ -107,10 +109,13 @@ class WindowController:
         if gesture is None:
             return self.cancel()
         if self._hand_anchor is not None:
-            width, height = self._input.size()
+            desktop = virtual_desktop()
+            width, height = desktop.width, desktop.height
             x = self._mouse_anchor[0] + (points[9].x - self._hand_anchor.x) * width * self.settings.drag_sensitivity
             y = self._mouse_anchor[1] + (points[9].y - self._hand_anchor.y) * height * self.settings.drag_sensitivity
-            self._input.moveTo(x, y)
+            x, y = desktop.clamp(x, y)
+            if not set_cursor_position(x, y):
+                self._input.moveTo(x, y)
         self._grab_wrist = points[0]
         return self._try_throw(points, now)
 

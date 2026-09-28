@@ -22,6 +22,8 @@ La versión actual permite:
 - mostrar FPS y salir de forma segura con `Ctrl+Q`.
 
 Consulta [GESTURES.md](GESTURES.md) para la lista completa de gestos y funciones.
+Consulta [CALIBRATION.md](CALIBRATION.md) para calibrar cada equipo y probar
+uno o varios monitores.
 
 ## Hoja de ruta
 
