@@ -267,6 +267,15 @@ class DictationController:
             self._publish(session, "fallback", f"CUDA no disponible ({exc}); usando CPU")
             return self._decode(self._model, audio)
 
+    def transcribe_utterance(self, audio: np.ndarray) -> str:
+        """Transcribe una frase corta usando el mismo modelo y backend del dictado."""
+        transcript = self._transcribe_audio(audio, self._session)
+        if self._loaded_device is not None:
+            self._events.put(
+                SpeechEvent(self._session, "backend", f"Whisper: {self._loaded_device.upper()}")
+            )
+        return transcript
+
     def _decode(self, model: object, audio: np.ndarray) -> str:
         segments, _info = model.transcribe(
             audio,

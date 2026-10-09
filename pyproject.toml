@@ -8,6 +8,7 @@ dependencies = [
     "faster-whisper>=1.1,<2",
     "huggingface-hub>=0.30,<2",
     "mediapipe>=0.10.21,<2",
+    "openwakeword>=0.6,<0.7",
     "opencv-contrib-python>=4.10,<5",
     "pyautogui>=0.9.54,<1",
     "sounddevice>=0.5,<1",

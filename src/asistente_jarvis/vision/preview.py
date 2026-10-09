@@ -24,6 +24,7 @@ from asistente_jarvis.gestures.detector import (
 from asistente_jarvis.gestures.geometry import NormalizedPoint, distance
 from asistente_jarvis.vision.hand_tracker import HandObservation, HandTracker
 from asistente_jarvis.vision.calibration import CalibrationPanel
+from asistente_jarvis.speech.voice_assistant import VoiceAssistantController
 
 
 HAND_CONNECTIONS = (
@@ -52,6 +53,7 @@ class PreviewOptions:
     microphone: int | None = None
     speech_device: str = "auto"
     speech_language: str = "es"
+    voice_assistant: bool = True
 
 
 def _open_camera(cv2: object, index: int, backend: str) -> object:
@@ -279,6 +281,10 @@ def run_preview(options: PreviewOptions) -> int:
             language=options.speech_language,
         ) if options.control_mouse else None
     )
+    voice_assistant = (
+        VoiceAssistantController(dictation)
+        if options.control_mouse and options.voice_assistant else None
+    )
     capture = _open_camera(cv2, options.camera_index, options.backend)
     overlay: CommandOverlay | None = None
     user32 = ctypes.windll.user32
@@ -324,6 +330,8 @@ def run_preview(options: PreviewOptions) -> int:
     try:
         if mouse is not None:
             overlay = CommandOverlay()
+        if voice_assistant is not None:
+            voice_assistant.start()
         with HandTracker(options.model_path, num_hands=2) as tracker:
             while True:
                 ok, frame = capture.read()
@@ -401,6 +409,8 @@ def run_preview(options: PreviewOptions) -> int:
                         if mouse.armed:
                             dictation.cancel()
                             dictation_writer = None
+                            if voice_assistant is not None:
+                                voice_assistant.resume()
                             mouse.stop()
                             window.cancel()
                             _dispatch_intents(dispatcher, resolver.reset_all())
@@ -409,6 +419,20 @@ def run_preview(options: PreviewOptions) -> int:
                     f8_was_down = f8_is_down
                     action = None
                     gesture_result = ActionResult()
+                    if voice_assistant is not None:
+                        for voice_event in voice_assistant.poll():
+                            if voice_event.kind == "microphone":
+                                print(voice_event.message)
+                            elif voice_event.kind == "transcript":
+                                print(f"Hey Jarvis oyó: {voice_event.message}")
+                            elif voice_event.kind == "error":
+                                print(f"Asistente de voz: {voice_event.message}")
+                                action = "Asistente de voz no disponible"
+                            elif voice_event.kind in ("action", "ignored", "wake"):
+                                action = voice_event.message or "Hey Jarvis: escuchando orden"
+                            if voice_event.kind in ("wake", "action", "ignored", "error"):
+                                if overlay is not None and action is not None:
+                                    overlay.show(action)
                     for speech_event in dictation.poll():
                         event_action = None
                         if speech_event.kind == "text":
@@ -430,6 +454,8 @@ def run_preview(options: PreviewOptions) -> int:
                         elif speech_event.kind == "error":
                             event_action = "Error de micrófono / Whisper"
                             print(f"Error de dictado: {speech_event.message}")
+                            if voice_assistant is not None:
+                                voice_assistant.resume()
                         elif speech_event.kind in ("microphone", "backend"):
                             print(speech_event.message)
                         elif speech_event.kind == "fallback":
@@ -440,6 +466,8 @@ def run_preview(options: PreviewOptions) -> int:
                         elif speech_event.kind == "done":
                             event_action = "Dictado terminado"
                             dictation_writer = None
+                            if voice_assistant is not None:
+                                voice_assistant.resume()
                         if event_action is not None:
                             action = event_action
                             if overlay is not None:
@@ -509,6 +537,8 @@ def run_preview(options: PreviewOptions) -> int:
                                 thumb_latched = True
                                 if gesture is Gesture.THUMBS_UP and dictation.state == "idle":
                                     try:
+                                        if voice_assistant is not None and not voice_assistant.pause():
+                                            raise RuntimeError("Jarvis aún está procesando una orden de voz.")
                                         dictation_window = foreground_window()
                                         dictation.start()
                                         dictation_writer = DictationWriter(dictation_window)
@@ -516,6 +546,8 @@ def run_preview(options: PreviewOptions) -> int:
                                         mouse.cancel_gesture()
                                         _dispatch_intents(dispatcher, resolver.reset_all())
                                     except (FileNotFoundError, RuntimeError) as exc:
+                                        if voice_assistant is not None:
+                                            voice_assistant.resume()
                                         action = "Whisper no disponible"
                                         print(f"Error de dictado: {exc}")
                                 elif gesture is Gesture.THUMBS_DOWN and dictation.state == "recording":
@@ -538,6 +570,8 @@ def run_preview(options: PreviewOptions) -> int:
                             stop_latched = True
                             dictation.cancel()
                             dictation_writer = None
+                            if voice_assistant is not None:
+                                voice_assistant.resume()
                             mouse.stop()
                             action = "STOP: control pausado"
                             if overlay is not None:
@@ -619,6 +653,12 @@ def run_preview(options: PreviewOptions) -> int:
                         status = "DICTANDO: PULGAR ABAJO PARA TERMINAR"
                     elif dictation.state == "finishing":
                         status = "PROCESANDO ULTIMOS FRAGMENTOS"
+                    elif voice_assistant is not None and voice_assistant.state == "command":
+                        status = "HEY JARVIS: ESCUCHANDO ORDEN"
+                    elif voice_assistant is not None and voice_assistant.state == "processing":
+                        status = "PROCESANDO ORDEN DE VOZ"
+                    elif voice_assistant is not None and voice_assistant.state == "wake":
+                        status = "HEY JARVIS: ESCUCHA LOCAL ACTIVA"
                     elif window.grabbing:
                         status = "VENTANA TOMADA: ABRE LA MANO PARA MAXIMIZAR"
                     elif window.candidate:
@@ -740,6 +780,8 @@ def run_preview(options: PreviewOptions) -> int:
             window.close()
         if mouse is not None:
             mouse.close()
+        if voice_assistant is not None:
+            voice_assistant.close()
         if dictation is not None:
             dictation.close()
         capture.release()

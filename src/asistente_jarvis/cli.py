@@ -62,6 +62,10 @@ def build_parser() -> argparse.ArgumentParser:
                 "--speech-language", default="es",
                 help="Idioma del dictado en código ISO; por defecto: es.",
             )
+            vision.add_argument(
+                "--no-voice-assistant", action="store_true",
+                help="Desactiva la escucha local de «Hey Jarvis».",
+            )
 
     download = subparsers.add_parser(
         "download-model", help="Descarga el modelo oficial de Hand Landmarker."
@@ -81,6 +85,9 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=DEFAULT_WHISPER_MODEL_PATH,
         help=f"Directorio del modelo (por defecto: {DEFAULT_WHISPER_MODEL_PATH}).",
+    )
+    subparsers.add_parser(
+        "prepare-wake-word", help="Descarga el modelo local de activación Hey Jarvis."
     )
     return parser
 
@@ -108,6 +115,13 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Whisper large-v3 disponible en: {path}")
             return 0
 
+        if args.command == "prepare-wake-word":
+            from openwakeword.utils import download_models
+
+            download_models(model_names=["hey_jarvis_v0.1.tflite"])
+            print("Modelo Hey Jarvis preparado para openWakeWord.")
+            return 0
+
         if args.command in ("preview", "control"):
             from asistente_jarvis.vision.preview import PreviewOptions, run_preview
 
@@ -122,6 +136,7 @@ def main(argv: list[str] | None = None) -> int:
                 microphone=getattr(args, "microphone", None),
                 speech_device=getattr(args, "speech_device", "auto"),
                 speech_language=getattr(args, "speech_language", "es"),
+                voice_assistant=not getattr(args, "no_voice_assistant", False),
             )
             return run_preview(options)
     except (FileNotFoundError, RuntimeError, ValueError) as exc:

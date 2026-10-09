@@ -18,6 +18,7 @@ La versión actual permite:
 - tomar, mover, maximizar y encajar la ventana activa usando una garra y la otra mano;
 - iniciar el recorte de pantalla con `ILoveYou` y mostrar avisos breves sobre el escritorio;
 - dictar con pulgar arriba, transcribir localmente con Whisper large-v3 y escribir en la ventana activa;
+- activar órdenes de voz diciendo «Hey Jarvis» y abrir aplicaciones desde el menú Inicio;
 - liberar el botón y desactivar el control con dos palmas abiertas sostenidas;
 - mostrar FPS y salir de forma segura con `Ctrl+Q`.
 
@@ -225,6 +226,53 @@ puede ir considerablemente más lento que el habla, por lo que el texto seguirá
 apareciendo por fragmentos, pero con retraso. Para acercarse al tiempo real con
 este modelo, Windows debe encontrar CUDA 12 (cuBLAS) y cuDNN 9 en este entorno
 Python. [faster-whisper documenta esos requisitos](https://github.com/SYSTRAN/faster-whisper#gpu).
+
+## Órdenes de voz «Hey Jarvis»
+
+`control` mantiene activo un detector local pequeño de la frase **«Hey Jarvis»**.
+Al reconocerla, captura la frase siguiente, la transcribe con el mismo Whisper
+large-v3 y busca una aplicación usando el menú Inicio de Windows. Por ejemplo:
+
+```text
+Hey Jarvis … abre Spotify
+```
+
+La detección de activación no necesita cuenta ni clave. Su modelo reconoce la
+frase inglesa completa «Hey Jarvis»; después, Whisper procesa la orden en
+español. Las primeras órdenes pueden tardar más mientras se carga large-v3 en
+CUDA. En este equipo el detector de activación consume CPU de forma continua,
+mientras Whisper solo trabaja después de la frase de activación. El audio se
+mantiene en memoria y no se envía a servicios remotos.
+
+Prepara una vez los modelos ligeros de openWakeWord:
+
+```powershell
+uv run asistente-jarvis prepare-wake-word
+```
+
+El comando descarga alrededor de 9 MB en los recursos de
+openWakeWord dentro del entorno `.venv`. `uv sync` instala automáticamente la
+dependencia `openwakeword` y su runtime ONNX. Las órdenes están limitadas por
+ahora a abrir una aplicación con «abre», «inicia» o «lanza» más su nombre.
+Windows busca ese nombre entre las aplicaciones registradas en Inicio; la
+aplicación debe aparecer en la búsqueda del sistema. Esta versión no ejecuta
+comandos arbitrarios ni accede a archivos.
+
+La frase de activación está entrenada para inglés; pronunciada como «Hey
+Yarvis» puede requerir probar varias veces o ajustar el umbral en una siguiente
+iteración. El modelo Hey Jarvis de openWakeWord está publicado con licencia
+CC BY-NC-SA 4.0, adecuada para este uso personal.
+
+Para desactivar la escucha continua en una ejecución:
+
+```powershell
+uv run asistente-jarvis control --no-voice-assistant
+```
+
+Durante el dictado iniciado con pulgar arriba, el detector suelta el micrófono;
+lo retoma al terminar o cancelar el dictado. Para escoger el micrófono de voz,
+usa el mismo `--microphone N` que en el dictado. El micrófono Realtek se elige
+automáticamente cuando está disponible.
 
 El programa prefiere el micrófono Realtek de la captura; en este equipo aparece
 como índice `1` y también es la entrada predeterminada de Python. Si cambia,
